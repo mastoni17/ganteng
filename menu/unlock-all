@@ -1,0 +1,43 @@
+#!/bin/bash
+# pewarna hidup
+red='\e[1;31m'
+green='\e[1;32m'
+blue="\033[1;96m"
+NC='\e[0m'
+clear
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | lolcat
+echo -e "\E[1;41;97m           UNLOCK ALL SSH ACCOUNTS            \E[0m"
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | lolcat
+echo -e "Memeriksa dan membuka kunci semua akun..."
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | lolcat
+
+count=0
+
+# Membaca daftar user dari /etc/passwd
+while read expired
+do
+    AKUN="$(echo $expired | cut -d: -f1)"
+    ID="$(echo $expired | grep -v nobody | cut -d: -f3)"
+    
+    # Hanya memproses user biasa (UID >= 1000)
+    if [[ $ID -ge 1000 ]]; then
+        status="$(passwd -S $AKUN 2>/dev/null | awk '{print $2}')"
+        
+        # Jika statusnya "L" (Locked), maka lakukan Unlock
+        if [[ "$status" = "L" ]]; then
+            passwd -u $AKUN > /dev/null 2>&1
+            echo -e "Username ${blue}$AKUN${NC} Sukses Di ${green}UNLOCKED${NC}."
+            ((count++))
+        fi
+    fi
+done < /etc/passwd
+
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | lolcat
+if [[ $count -eq 0 ]]; then
+    echo -e "${red}Tidak ada akun yang sedang terkunci saat ini.${NC}"
+else
+    echo -e "Total ${green}$count${NC} akun berhasil di-unlock secara massal!"
+fi
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | lolcat
+echo ""
+read -n 1 -s -r -p "Enter Back To Menu"

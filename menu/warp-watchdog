@@ -1,0 +1,9 @@
+#!/bin/bash
+# Mengecek status WARP
+status=$(warp-cli status | grep -i "Status update:")
+
+# Jika statusnya mengandung kata "Disconnected", maka paksa connect ulang
+if [[ "$status" == *"Disconnected"* ]]; then
+    warp-cli connect > /dev/null 2>&1
+    echo "$(date): WARP terputus, melakukan koneksi ulang otomatis." >> /var/log/warp-watchdog.log
+fi

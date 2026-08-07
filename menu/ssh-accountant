@@ -1,0 +1,17 @@
+#!/bin/bash
+DIR_USAGE="/etc/ssh/usage"
+mkdir -p $DIR_USAGE
+
+# Loop semua user di sistem (UID >= 1000)
+while IFS=: read -r username _ uid _ _ _ _; do
+    if [[ $uid -ge 1000 && "$username" != "nobody" ]]; then
+        out_bytes=$(iptables -n -v -L OUTPUT -x | grep -w "$uid" | awk '{print $2}' | head -1)
+        in_bytes=$(iptables -n -v -L INPUT -x | grep -w "$uid" | awk '{print $2}' | head -1)
+        [[ -z "$out_bytes" ]] && out_bytes=0
+        [[ -z "$in_bytes" ]] && in_bytes=0
+        total_usage=$((out_bytes + in_bytes))
+        if [[ $total_usage -gt 0 ]]; then
+            echo "$total_usage" > "$DIR_USAGE/$username"
+        fi
+    fi
+done < /etc/passwd

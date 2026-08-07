@@ -1,0 +1,77 @@
+#!/bin/bash
+# ==========================================================
+#  SCRIPT LIMIT QUOTA SSH & VMESS (Safe for Cronjob)
+#  Fungsi: Cek penggunaan data -> Kunci akun jika Over
+# ==========================================================
+
+# Path Data (Sesuaikan dengan autoscript Anda jika berbeda)
+DIR_USAGE_SSH="/etc/ssh/usage"
+DIR_LIMIT_SSH="/etc/ssh/limit"
+DIR_USAGE_VMESS="/etc/vmess/usage"
+DIR_LIMIT_VMESS="/etc/vmess/limit"
+
+# --- FUNGSI 1: CEK LIMIT SSH ---
+function cek_ssh() {
+    # Ambil semua user dengan UID >= 1000 (User biasa)
+    grep -E "^([^:]+):[^:]+:[0-9]{4,}:" /etc/passwd | cut -d: -f1 | while read USERNAME; do
+        
+        # Cek apakah user memiliki file limit
+        if [[ -e "$DIR_LIMIT_SSH/$USERNAME" ]]; then
+            LIMIT=$(cat "$DIR_LIMIT_SSH/$USERNAME")
+            
+            # Ambil data usage (Default 0 jika belum ada file)
+            if [[ -e "$DIR_USAGE_SSH/$USERNAME" ]]; then
+                USAGE=$(cat "$DIR_USAGE_SSH/$USERNAME")
+            else
+                USAGE=0
+            fi
+
+            # Logika Bandingkan
+            if [[ $USAGE -gt $LIMIT ]]; then
+                echo "User $USERNAME Over Quota! ($USAGE > $LIMIT)"
+                
+                # 1. Kunci Password (SSH)
+                passwd -l "$USERNAME" > /dev/null 2>&1
+                
+                # 2. Matikan Proses User yang sedang jalan
+                pkill -u "$USERNAME"
+                
+                # 3. Hapus file limit agar tidak di-cek terus (Opsional)
+                # rm -f "$DIR_LIMIT_SSH/$USERNAME"
+            fi
+        fi
+    done
+}
+
+# --- FUNGSI 2: CEK LIMIT VMESS (Contoh Xray) ---
+function cek_vmess() {
+    # Loop data user vmess dari folder usage
+    # (Asumsi nama file = nama user)
+    if [[ -d "$DIR_USAGE_VMESS" ]]; then
+        for USER_FILE in "$DIR_USAGE_VMESS"/*; do
+            USERNAME=$(basename "$USER_FILE")
+            
+            if [[ -e "$DIR_LIMIT_VMESS/$USERNAME" ]]; then
+                USAGE=$(cat "$USER_FILE")
+                LIMIT=$(cat "$DIR_LIMIT_VMESS/$USERNAME")
+                
+                if [[ $USAGE -gt $LIMIT ]]; then
+                    echo "VMESS User $USERNAME Over Quota!"
+                    # Logika Hapus/Matikan User Xray
+                    # Biasanya dengan menghapus dari config.json atau sed
+                    # Contoh: sed -i "/$USERNAME/d" /etc/xray/config.json
+                    
+                    # Restart Xray jika ada perubahan
+                    # systemctl restart xray
+                fi
+            fi
+        done
+    fi
+}
+
+# --- EKSEKUSI UTAMA ---
+cek_ssh
+# cek_vmess # Uncomment jika struktur folder vmess sudah sesuai
+
+# Selesai & Keluar (PENTING AGAR TIDAK HANG)
+exit 0

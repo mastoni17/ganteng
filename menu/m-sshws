@@ -1,39 +1,19 @@
 #!/bin/bash
-Green="\e[92;1m"
-RED="\033[31m"
-YELLOW="\033[33m"
-BLUE="\033[36m"
-FONT="\033[0m"
-GREENBG="\033[42;37m"
-REDBG="\033[41;37m"
-OK="${Green}--->${FONT}"
-ERROR="${RED}[ERROR]${FONT}"
-GRAY="\e[1;30m"
-NC='\e[0m'
-red='\e[1;31m'
-green='\e[0;32m'
-DF='\e[39m'
-Bold='\e[1m'
-Blink='\e[5m'
-yell='\e[33m'
-red='\e[31m'
-green='\e[32m'
-blue='\e[34m'
-PURPLE='\e[35m'
-cyan='\e[36m'
-Lred='\e[91m'
-Lgreen='\e[92m'
-Lyellow='\e[93m'
-NC='\e[0m'
+NC='\033[0m'
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 ORANGE='\033[0;33m'
-LIGHT='\033[0;37m'
-grenbo="\e[92;1m"
-red() { echo -e "\\033[32;1m${*}\\033[0m"; }
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+BOLD='\033[1m'
+BORDER="${CYAN}"
+
+# // Checking Permission (Sesuai Script Asli)
 ipsaya=$(curl -sS ipv4.icanhazip.com)
 data_server=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Date | sed -e 's/< Date: //')
 date_list=$(date +"%Y-%m-%d" -d "$data_server")
 data_ip="https://raw.githubusercontent.com/mastoni17/ijin/refs/heads/main/regmas"
+
 checking_sc() {
   useexp=$(wget -qO- $data_ip | grep $ipsaya | awk '{print $3}')
   if [[ $date_list < $useexp ]]; then
@@ -43,76 +23,160 @@ checking_sc() {
     echo -e "\033[42m          404 NOT FOUND AUTOSCRIPT          \033[0m"
     echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
     echo -e ""
-    echo -e "            ${RED}PERMISSION DENIED !${NC}"
+    echo -e "             ${RED}PERMISSION DENIED !${NC}"
     echo -e "   \033[0;33mYour VPS${NC} $ipsaya \033[0;33mHas been Banned${NC}"
     echo -e "     \033[0;33mBuy access permissions for scripts${NC}"
-    echo -e "             \033[0;33mContact Admin :${NC}"
-    echo -e "      ${GREEN}TELEGRAM${NC} https://t.me/MastoniOrderBot"
+    echo -e "              \033[0;33mContact Admin :${NC}"
     echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
     exit 0
   fi
 }
 checking_sc
 clear
-#Domain
-domain=$(cat /etc/xray/domain)
 
-echo -e "\033[1;93m┌──────────────────────────────────────────┐\033[0m"
-echo -e "                SSH & OpenVPN           "
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
-echo -e "\033[1;93m┌──────────────────────────────────────────┐\033[0m"
-echo -e "  ${ORANGE}[1].${NC}\033[0;36m Create SSH & OpenVPN Account${NC}"
-echo -e "  ${ORANGE}[2].${NC}\033[0;36m Cretae Trial SSH & OpenVPN ${NC}"
-echo -e "  ${ORANGE}[3].${NC}\033[0;36m Renew SSH & OpenVPN ${NC}"
-echo -e "  ${ORANGE}[4].${NC}\033[0;36m Check User Login SSH & OpenVPN${NC}"
-echo -e "  ${ORANGE}[5].${NC}\033[0;36m Daftar User SSH & OpenVPN ${NC}"
-echo -e "  ${ORANGE}[6].${NC}\033[0;36m Hapus SSH & OpenVpn Account ${NC}"
-echo -e "  ${ORANGE}[7].${NC}\033[0;36m Hapus User Expired SSH & OpenVPN ${NC}"
-echo -e "  ${ORANGE}[8].${NC}\033[0;36m Set up Autokill SSH ${NC}"
-echo -e "  ${ORANGE}[9].${NC}\033[0;36m Cek User Multi Login SSH ${NC}"
-echo -e "  ${ORANGE}[10].${NC}\033[0;36m Lock User SSH ${NC}"
-echo -e "  ${ORANGE}[11].${NC}\033[0;36m Unlock User SSH ${NC}"
-echo -e "  ${ORANGE}[x].${NC}\033[0;36m  Exit ${NC}"
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
-read -p "Select From Options [ 1 - 11 or x ] : " menu
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        r_start=255; g_start=215; b_start=0;
+        r_mid=0;      g_mid=128;   b_mid=255;
+        r_end=138;    g_end=43;    b_end=226;
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(r_start + (r_mid - r_start) * f);
+                g = int(g_start + (g_mid - g_start) * f);
+                b = int(b_start + (b_mid - b_start) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(r_mid + (r_end - r_mid) * f);
+                g = int(g_mid + (g_end - g_mid) * f);
+                b = int(b_mid + (b_end - b_mid) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+
+# Perbaikan panjang garis tabel (Disesuaikan menjadi 41 karakter '- ')
+line() { echo -e "${BORDER} ╭─────────────────────────────────────────╮${NC}"; }
+mid()  { echo -e "${BORDER} ├─────────────────────────────────────────┤${NC}"; }
+close(){ echo -e "${BORDER} ╰─────────────────────────────────────────╯${NC}"; }
+
+BACKUP_FILE="/etc/ssh_backup"
+restore_ssh() {
+    clear
+    print_gradient "╭═════════════════════════════════════════╮"
+    print_gradient "│          RESTORE DELETED SSH            │"
+    print_gradient "╰═════════════════════════════════════════╯"
+    echo -e ""
+    if [[ ! -f "$BACKUP_FILE" ]] || [[ ! -s "$BACKUP_FILE" ]]; then
+        echo -e "${RED} No archived SSH users found.${NC}"
+        echo -e ""
+        read -n 1 -s -r -p " Press any key to return"
+        m-sshws
+        return
+    fi
+
+    echo -e " List of archived users:"
+    echo -e "${BORDER} ─────────────────────────────────────────${NC}"
+    echo -e " No  |  Username"
+    echo -e "${BORDER} ─────────────────────────────────────────${NC}"
+    i=1
+    while IFS=':' read -r b_user b_hash; do
+        printf " %-3s | %-20s\n" "$i" "$b_user"
+        i=$((i+1))
+    done < "$BACKUP_FILE"
+    echo -e "${BORDER} ─────────────────────────────────────────${NC}"
+    
+    read -p " Select Number to Restore (x to cancel): " selection
+    if [[ "$selection" == "x" ]]; then m-sshws; return; fi
+    data_restore=$(sed -n "${selection}p" "$BACKUP_FILE")
+    
+    if [[ -z "$data_restore" ]]; then
+        echo -e "${RED} Invalid selection.${NC}"
+        sleep 1
+        restore_ssh
+        return
+    fi
+    user_res=$(echo "$data_restore" | cut -d: -f1)
+    pass_res=$(echo "$data_restore" | cut -d: -f2)
+    if getent passwd "$user_res" > /dev/null 2>&1; then
+        echo -e "${RED} User $user_res already exists in system!${NC}"
+        sed -i "/^$user_res:/d" "$BACKUP_FILE"
+        read -n 1 -s -r -p " Press any key to return"
+        m-sshws
+        return
+    fi
+
+    echo -e ""
+    echo -e " Restore User : ${GREEN}$user_res${NC}"
+    read -p " Active Duration (Days): " masaaktif
+    exp=$(date -d "$masaaktif days" +"%Y-%m-%d")
+    useradd -e "$exp" -p "$pass_res" -s /bin/false -M "$user_res"
+    sed -i "/^$user_res:/d" "$BACKUP_FILE"
+    echo -e ""
+    echo -e "${GREEN} User $user_res successfully restored!${NC}"
+    echo -e " Valid until: $exp"
+    echo -e " Password: (Same as before)"
+    echo -e ""
+    read -n 1 -s -r -p " Press any key to return"
+    m-sshws
+}
+
 echo -e ""
+print_gradient "╭═════════════════════════════════════════╮"
+print_gradient "│        SSH & OPENVPN MANAGEMENT         │"
+print_gradient "╰═════════════════════════════════════════╯"
+echo -e ""
+
+line
+# Perbaikan: Lebar kolom %-34s disesuaikan untuk meluruskan batas kanan
+printf "${BORDER} │ ${ORANGE}1.${NC}  ${CYAN}%-34s ${BORDER}│${NC}\n" "Create SSH & OpenVPN Account"
+printf "${BORDER} │ ${ORANGE}2.${NC}  ${CYAN}%-34s ${BORDER}│${NC}\n" "Create Trial SSH & OpenVPN"
+mid
+printf "${BORDER} │ ${ORANGE}3.${NC}  ${CYAN}%-34s ${BORDER}│${NC}\n" "Renew SSH & OpenVPN"
+printf "${BORDER} │ ${ORANGE}4.${NC}  ${CYAN}%-34s ${BORDER}│${NC}\n" "Delete SSH & OpenVPN Account"
+mid
+printf "${BORDER} │ ${ORANGE}5.${NC}  ${CYAN}%-34s ${BORDER}│${NC}\n" "Check User Login SSH"
+printf "${BORDER} │ ${ORANGE}6.${NC}  ${CYAN}%-34s ${BORDER}│${NC}\n" "List Member SSH & OpenVPN"
+printf "${BORDER} │ ${ORANGE}7.${NC}  ${CYAN}%-34s ${BORDER}│${NC}\n" "Check Multi Login SSH"
+mid
+printf "${BORDER} │ ${ORANGE}8.${NC}  ${CYAN}%-34s ${BORDER}│${NC}\n" "Set up Autokill SSH"
+printf "${BORDER} │ ${ORANGE}9.${NC}  ${RED}%-34s ${BORDER}│${NC}\n" "Delete Expired User"
+printf "${BORDER} │ ${ORANGE}10.${NC} ${GREEN}%-34s ${BORDER}│${NC}\n" "Restore / Reactivate SSH"
+mid
+printf "${BORDER} │ ${ORANGE}11.${NC} ${CYAN}%-34s ${BORDER}│${NC}\n" "Lock User SSH"
+printf "${BORDER} │ ${ORANGE}12.${NC} ${CYAN}%-34s ${BORDER}│${NC}\n" "Unlock User SSH"
+printf "${BORDER} │ ${ORANGE}13.${NC} ${CYAN}%-34s ${BORDER}│${NC}\n" "Unlock ALL User SSH"
+mid
+# Menambahkan menu Limit IP dan Kuota
+printf "${BORDER} │ ${ORANGE}14.${NC} ${YELLOW}%-34s ${BORDER}│${NC}\n" "Set Limit Login IP SSH"
+printf "${BORDER} │ ${ORANGE}15.${NC} ${YELLOW}%-34s ${BORDER}│${NC}\n" "Set Limit Kuota SSH"
+mid
+printf "${BORDER} │ ${ORANGE}x.${NC}  ${ORANGE}%-34s ${BORDER}│${NC}\n" "Back To Main Menu"
+close
+echo -e ""
+read -p " Select From Options [1-15 or x] : " menu
+
 case $menu in
-1)
-    addssh
-    ;;
-2)
-    trial
-    ;;
-3)
-    renewssh
-    ;;
-4)
-    cekssh
-    ;;
-5)
-    member
-    ;;
-6)
-    delssh
-    ;;
-7)
-    delexp
-    ;;
-8)
-    autokill
-    ;;
-9)
-    ceklim
-    ;;
-10) 
-    clear
-    lock
-   ;;
-11)
-    clear
-    unlock
-    ;;
-*)
-    menu
-    ;;
+1) clear ; addssh ;;
+2) clear ; trial ;;
+3) clear ; renewssh ;;
+4) clear ; delssh ;;
+5) clear ; cekssh ;;
+6) clear ; member ;;
+7) clear ; ceklim ;;
+8) clear ; autokill ;;
+9) clear ; delexp ;;
+10) restore_ssh ;;
+11) clear ; lock ;;
+12) clear ; unlock ;;
+13) clear ; unlock-all ;;
+14) clear ; set-limit-login ;; 
+15) clear ; set-limit-kuota ;;
+x) menu ;;
+*) m-sshws ;;
 esac

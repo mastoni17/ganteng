@@ -1,0 +1,146 @@
+#!/bin/bash
+# --- DEFINISI WARNA ---
+yellow="\033[0;33m"
+ungu="\033[0;35m"
+Red="\033[91;1m"
+Xark="\033[0m"
+BlueCyan="\033[5;36m"
+WhiteBe="\033[5;37m"
+GreenBe="\033[5;32m"
+YellowBe="\033[5;33m"
+BlueBe="\033[5;34m"
+
+# Ambil Nama Admin/Server
+nama=$(cat /etc/xray/username 2>/dev/null || echo "Admin")
+
+# --- FUNGSI UTAMA TEMA ---
+function baris_panjang() {
+  echo -e "${BlueCyan} ——————————————————————————————————— ${Xark} "
+}
+
+function xdxl_Banner() {
+    clear
+    baris_panjang
+    echo -e "${ungu}            CREATE SLOWDNS       ${Xark} "
+    baris_panjang
+}
+
+# --- ANIMASI LOADING ---
+duration=3
+frames=("██10%" "█████35%" "█████████65%" "█████████████80%" "█████████████████████90%" "█████████████████████████100%")
+num_frames=${#frames[@]}
+num_iterations=$((duration))
+
+Loading_Animasi() {
+    for ((i = 0; i < num_iterations; i++)); do
+        clear
+        index=$((i % num_frames))
+        color_code=$((31 + i % 7))
+        echo ""
+        echo ""
+        echo ""
+        echo -e "\e[1;${color_code}m ${frames[$index]}\e[0m"
+        sleep 0.5
+    done
+}
+
+function Loading_Succes() {
+    clear
+    echo -e  "\033[5;32mSucces\033[0m"
+    sleep 2
+    clear
+}
+
+# --- MULAI SCRIPT ---
+xdxl_Banner
+echo -e ""
+echo -e "${WhiteBe} Masukkan Data Akun Baru: ${Xark}"
+echo -e ""
+
+# Input Data
+read -p "   Username       : " Login
+read -p "   Password       : " Pass
+read -p "   Expired (Days) : " masaaktif
+
+# Validasi Input
+if [[ -z $Login || -z $Pass || -z $masaaktif ]]; then
+    echo -e "${Red}Error: Data tidak boleh kosong!${Xark}"
+    sleep 2
+    menu
+    exit
+fi
+
+# --- PROSES PEMBUATAN AKUN ---
+IP=$(curl -sS ipv4.icanhazip.com)
+domen=$(cat /etc/xray/domain 2>/dev/null)
+NS=$(cat /etc/xray/dns 2>/dev/null)
+PUB=$(cat /etc/slowdns/server.pub 2>/dev/null)
+
+# Hitung Tanggal
+tgl=$(date -d "$masaaktif days" +"%d")
+bln=$(date -d "$masaaktif days" +"%b")
+thn=$(date -d "$masaaktif days" +"%Y")
+expe="$tgl $bln, $thn"
+tgl2=$(date +"%d")
+bln2=$(date +"%b")
+thn2=$(date +"%Y")
+tnggl="$tgl2 $bln2, $thn2"
+
+# Eksekusi System User
+useradd -e `date -d "$masaaktif days" +"%Y-%m-%d"` -s /bin/false -M $Login
+echo -e "$Pass\n$Pass\n"|passwd $Login &> /dev/null
+
+# --- SEND TELEGRAM ---
+CHATID=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 3 2>/dev/null)
+KEY=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 2 2>/dev/null)
+URL="https://api.telegram.org/bot$KEY/sendMessage"
+
+TEXT="<code>-----------------------</code>
+<b>⚠️ SSH & SLOWDNS CREATED</b>
+<code>-----------------------</code>
+<code>Username     :</code> <code>$Login</code>
+<code>Password     :</code> <code>$Pass</code>
+<code>Expired      :</code> <code>$masaaktif Hari</code>
+<code>-----------------------</code>
+<code>IP Server    :</code> <code>$IP</code>
+<code>NS Domain    :</code> <code>$NS</code>
+<code>Pub Key      :</code> <code>$PUB</code>
+<code>-----------------------</code>
+"
+
+if [[ ! -z "$CHATID" && ! -z "$KEY" ]]; then
+    curl -s --max-time 10 -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
+fi
+
+# --- TAMPILKAN HASIL ---
+Loading_Animasi
+Loading_Succes
+xdxl_Banner # Clear screen dan tampilkan header lagi
+
+echo -e ""
+baris_panjang
+echo -e "${WhiteBe} DETAILS ACCOUNT ${Xark}"
+baris_panjang
+echo -e "${WhiteBe} Username     : ${Login} ${Xark}"
+echo -e "${WhiteBe} Password     : ${Pass} ${Xark}"
+echo -e "${WhiteBe} IP Server    : ${IP} ${Xark}"
+echo -e "${WhiteBe} NS Domain    : ${NS} ${Xark}"
+echo -e "${WhiteBe} Pub Key      : ${PUB} ${Xark}"
+echo -e "${WhiteBe} Hostname     : ${domen} ${Xark}"
+baris_panjang
+echo -e "${YellowBe} Active       : $masaaktif Hari ${Xark}"
+echo -e "${YellowBe} Created      : $tnggl ${Xark}"
+echo -e "${YellowBe} Expired      : $expe ${Xark}"
+baris_panjang
+echo ""
+
+# Footer / Credit
+sleep 1
+baris_panjang
+echo -e "${ungu}  Terimakasih Telah Menggunakan ${Xark}"
+echo -e "${ungu}           Script Credit ${Xark}"
+echo -e "${ungu}           $nama ${Xark}"
+baris_panjang
+echo ""
+read -n 1 -s -r -p "Press any key to back on menu"
+menu

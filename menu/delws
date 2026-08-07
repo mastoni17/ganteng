@@ -1,85 +1,171 @@
 #!/bin/bash
+# --- CONFIG COLORS & SYMBOLS ---
+R='\033[0m'            
+P='\033[1;37m'          
+M='\033[1;31m'         
+H='\033[1;32m'         
+K='\033[1;33m'         
+C='\033[1;36m'        
+Kedip='\033[5m'        
+
+# Background Blocks
+BG_M='\033[41m\033[1;37m' 
+BG_G='\033[42m\033[1;37m' 
+BG_K='\033[43m\033[1;30m' 
+
+# Symbols & Lines
+ki="${C}│${R}"
+ka="${C}│${R}"
+Garis="${C}────────────────────────────────────────────${R}"
+Atas="${C}┌$Garis┐${R}"
+Tengah="${C}├$Garis┤${R}"
+Bawah="${C}└$Garis┘${R}"
+
+# --- SYSTEM CHECK ---
 dateFromServer=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Date | sed -e 's/< Date: //')
 biji=`date +"%Y-%m-%d" -d "$dateFromServer"`
-RED='\033[0;31m'
-NC='\033[0m'
-GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-red='\e[1;31m'
-green='\e[0;32m'
-NC='\e[0m'
-green() { echo -e "\\033[32;1m${*}\\033[0m"; }
-red() { echo -e "\\033[31;1m${*}\\033[0m"; }
 
-# Telegram Bot Configuration
-CHATID=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 3)
-KEY=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 2)
-export TIME="10"
-export URL="https://api.telegram.org/bot$KEY/sendMessage"
+# ==========================================
+#   LOOPING UTAMA (AGAR TIDAK KEMBALI KE MENU)
+# ==========================================
+while true; do
+    clear
+    echo -e ""
+    echo -e "          ${Kedip}${K}🗑️  DELETE VMESS ACCOUNT 🗑️${R}"
+    echo -e ""
 
-# Function to send Telegram notification
-send_deletion_notification() {
-    local TEXT="<code>☉——————————————————————————☉</code>
-<code> 🗑️ Vmess Account Deleted 🗑️</code>
-<code>☉——————————————————————————☉</code>
-<code>Username    : $user</code>
-<code>Expired On  : $exp</code>
-<code>Deleted On  : $(date +"%d %b %Y %H:%M:%S")</code>
-<code>☉——————————————————————————☉</code>
-<code>🚀 Server: $(hostname)</code>
-<code>📌 IP: $(curl -s ipinfo.io/ip)</code>"
+    # --- 1. AMBIL DATA USER KE ARRAY ---
+    mapfile -t user_list < <(grep -E "^### " "/etc/xray/config.json" | cut -d ' ' -f 2 | sort | uniq)
+    total_client=${#user_list[@]}
 
-    curl -s --max-time $TIME -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
-}
+    # --- CEK JIKA KOSONG ---
+    if [[ ${total_client} == '0' ]]; then
+        echo -e "$Atas"
+        echo -e "$ki${BG_M}              NO CLIENT DATA                ${R}$ka"
+        echo -e "$Tengah"
+        echo -e "$ki ${M}You have no existing clients!             ${R}$ka"
+        echo -e "$Bawah"
+        echo ""
+        read -n 1 -s -r -p " Press any key to back on menu"
+        menu
+        break
+    fi
 
-clear
-NUMBER_OF_CLIENTS=$(grep -c -E "^### " "/etc/xray/config.json")
-if [[ ${NUMBER_OF_CLIENTS} == '0' ]]; then
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo -e "       Delete Vmess Account       "
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo ""
-    echo "You have no existing clients!"
-    echo ""
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    read -n 1 -s -r -p "Press any key to back on menu"
-    menu
-fi
+    # --- 2. TAMPILKAN LIST DENGAN NOMOR ---
+    echo -e "$Atas"
+    echo -e "$ki${BG_K}              LIST VMESS USER               ${R}$ka"
+    echo -e "$Tengah"
+    echo -e "$ki  ${P}NO  USER                   EXPIRED         ${R}$ka"
+    echo -e "$Tengah"
 
-clear
-echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "       Delete Vmess Account       "
-echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo "  User       Expired  " 
-echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-grep -E "^### " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | column -t | sort | uniq
-echo ""
-red "tap enter to go back"
-echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-read -rp "Input Username : " user
-if [ -z $user ]; then
-    menu
-else
+    no=1
+    for user in "${user_list[@]}"; do
+        exp=$(grep -wE "^### $user" "/etc/xray/config.json" | cut -d ' ' -f 3 | sort | uniq)
+        printf "$ki  ${C}%-4s${P}%-20s${K}%-15s${R}$ka\n" "$no)" "$user" "$exp"
+        ((no++))
+    done
+    
+    # --- TAMBAHAN MENU KEMBALI ---
+    echo -e "$Tengah"
+    echo -e "$ki  ${M}0)  BACK TO MAIN MENU                     ${R}$ka"
+    echo -e "$Bawah"
+    echo -e ""
+    echo -e " ${P}Type Number (1-$total_client) to delete, or (0) to exit${R}"
+    echo -e " ${Garis}"
+
+    # --- 3. INPUT ---
+    echo -ne " ${C}➤ Input Number / Username : ${P}"
+    read selection
+
+    # --- 4. LOGIKA INPUT ---
+    
+    # A. Jika Input Kosong -> Refresh Loop
+    if [ -z "$selection" ]; then
+        continue
+    fi
+
+    # B. Jika Input '0' -> Kembali ke Menu Utama
+    if [[ "$selection" == "0" ]]; then
+        menu
+        break
+    fi
+
+    # C. Jika Input Angka -> Konversi ke Username
+    if [[ $selection =~ ^[0-9]+$ ]]; then
+        if [[ $selection -ge 1 && $selection -le $total_client ]]; then
+            user="${user_list[$((selection-1))]}"
+        else
+            echo -e " ${M}[!] Error: Number out of range!${R}"
+            sleep 1
+            continue
+        fi
+    else
+        # D. Jika Input Username Manual
+        user="$selection"
+        if ! grep -qws "^### $user" "/etc/xray/config.json"; then
+            echo -e " ${M}[!] Error: Username not found!${R}"
+            sleep 1
+            continue
+        fi
+    fi
+
+    # ==========================================
+    # 5. PROSES BACKUP & DELETE (LOGIKA BARU)
+    # ==========================================
+    uuid=$(grep -w "$user" -A 3 /etc/xray/config.json | grep "id" | awk -F '"' '{print $4}' | head -n 1)
+    
+    BACKUP_FILE="/etc/xray/vmess_backup"
+    ARCHIVED="NO"
+
+    if [[ -n "$uuid" ]]; then
+        # Pastikan file backup ada
+        if [[ ! -f "$BACKUP_FILE" ]]; then touch "$BACKUP_FILE"; fi
+        
+        # Cek duplikat agar tidak double entry
+        if ! grep -q "^$user " "$BACKUP_FILE"; then
+            echo "$user $uuid" >> "$BACKUP_FILE"
+            ARCHIVED="YES"
+        else
+            ARCHIVED="ALREADY"
+        fi
+    fi
+
+    # B. PROSES DELETE DARI SYSTEM
     exp=$(grep -wE "^### $user" "/etc/xray/config.json" | cut -d ' ' -f 3 | sort | uniq)
+
     sed -i "/^### $user $exp/,/^},{/d" /etc/xray/config.json
     sed -i "/^### $user $exp/,/^},{/d" /etc/vmess/.vmess.db
     rm -rf /etc/vmess/$user
     rm -rf /etc/mastoni/limit/vmess/ip/$user
     systemctl restart xray > /dev/null 2>&1
-    
-    # Send Telegram notification
-    send_deletion_notification
-    
+
+    # --- TAMPILAN SUKSES ---
     clear
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo " Succes Delete Vmess Account"
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo " Client Name : $user"
-    echo " Expired On  : $exp"
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo ""
-fi
+    echo -e ""
+    echo -e "          ${Kedip}${K}✅ ACCOUNT DELETED SUCCESSFULLY ✅${R}"
+    echo -e ""
+    echo -e "$Atas"
+    echo -e "$ki${BG_G}              DELETED DETAILS               ${R}$ka"
+    echo -e "$Tengah"
+    printf "$ki  ${P}%-14s ${C}: ${M}%-24s${R}$ka\n" "Client Name" "$user"
+    printf "$ki  ${P}%-14s ${C}: ${K}%-24s${R}$ka\n" "Expired On" "$exp"
+    printf "$ki  ${P}%-14s ${C}: ${P}%-24s${R}$ka\n" "Deleted On" "$biji"
+    
+    # Info Status Backup
+    if [[ "$ARCHIVED" == "YES" ]]; then
+        printf "$ki  ${P}%-14s ${C}: ${H}%-24s${R}$ka\n" "Recycle Bin" "SAVED (Ready to Restore)"
+    elif [[ "$ARCHIVED" == "ALREADY" ]]; then
+        printf "$ki  ${P}%-14s ${C}: ${K}%-24s${R}$ka\n" "Recycle Bin" "Already Archived"
+    else
+        printf "$ki  ${P}%-14s ${C}: ${M}%-24s${R}$ka\n" "Recycle Bin" "FAILED (UUID Not Found)"
+    fi
+    
+    echo -e "$Bawah"
+    echo -e ""
+    
+    # --- PAUSE SEBELUM RELOAD ---
+    echo -e "${C} Account deleted. Returning to list...${R}"
+    read -n 1 -s -r -p " Press any key to continue"
+    # Kembali ke awal loop
+
+done

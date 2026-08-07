@@ -18,19 +18,19 @@ ORANGE='\033[0;33m'
 LIGHT='\033[0;37m'
 grenbo="\e[92;1m"
 
-bot="https://raw.githubusercontent.com/mastoni17/ganteng/refs/heads/main/bot/bot.sh"
+bot="https://raw.githubusercontent.com/Anggabayuwijaya599/SinggahVpn/refs/heads/main/bot/bot.sh"
 red() { echo -e "\\033[32;1m${*}\\033[0m"; }
 # Valid Script
 ipsaya=$(curl -sS ipv4.icanhazip.com)
 data_server=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Date | sed -e 's/< Date: //')
 date_list=$(date +"%Y-%m-%d" -d "$data_server")
-data_ip="https://raw.githubusercontent.com/mastoni17/ijin/refs/heads/main/regmas"
+data_ip="https://raw.githubusercontent.com/Anggabayuwijaya599/ijin/refs/heads/main/ipvps"
 checking_sc() {
   useexp=$(wget -qO- $data_ip | grep $ipsaya | awk '{print $3}')
   if [[ $date_list < $useexp ]]; then
     echo -ne
   else
-    echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
+  echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
     echo -e "\033[42m          404 NOT FOUND AUTOSCRIPT          \033[0m"
     echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
     echo -e ""
@@ -38,7 +38,7 @@ checking_sc() {
     echo -e "   \033[0;33mYour VPS${NC} $ipsaya \033[0;33mHas been Banned${NC}"
     echo -e "     \033[0;33mBuy access permissions for scripts${NC}"
     echo -e "             \033[0;33mContact Admin :${NC}"
-    echo -e "      ${GREEN}TELEGRAM${NC} https://t.me/MastoniOrderBot"
+    echo -e "      ${GREEN}TELEGRAM${NC} @Mastonigt"
     echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
     exit 0
   fi
@@ -162,6 +162,7 @@ echo -e " [\e[36m•1\e[0m] Add Bot Panel"
 echo -e " [\e[36m•2\e[0m] Delete Bot Panel"
 echo -e " [\e[36m•3\e[0m] Stop Bot Panel"
 echo -e " [\e[36m•4\e[0m] Restart Bot Panel"
+echo -e " [\e[36m•5\e[0m] Menu Bot TELEGRAM"
 echo -e "" 
 echo -e " [\e[31m•0\e[0m] \e[31mBack To Menu\033[0m"
 echo -e "" 
@@ -174,5 +175,6 @@ case $opt in
 02 | 2) clear ; hapus-bot ;;
 02 | 3) clear ; stop-bot ;;
 00 | 4) clear ; restart-bot ;;
+05 | 5) clear ; menu-bot ;;
 *) clear ; menu ;;
 esac

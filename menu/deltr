@@ -1,65 +1,194 @@
 #!/bin/bash
+# ==========================================
+#   PREMIUM DELETE TROJAN (WITH ARCHIVE)
+# ==========================================
+
+# --- CONFIG COLORS & SYMBOLS ---
+R='\033[0m'             # Reset
+P='\033[1;37m'          # Putih
+M='\033[1;31m'          # Merah
+H='\033[1;32m'          # Hijau
+K='\033[1;33m'          # Kuning
+C='\033[1;36m'          # Cyan
+Kedip='\033[5m'         # Efek Kedip
+
+# Background Blocks
+BG_M='\033[41m\033[1;37m' # Merah Block
+BG_G='\033[42m\033[1;37m' # Hijau Block
+BG_K='\033[43m\033[1;30m' # Kuning Block
+
+# --- CONFIG LAYOUT (LEBAR TOTAL 55 KARAKTER) ---
+ki="${C}│${R}"
+ka="${C}│${R}"
+Garis="${C}───────────────────────────────────────────────────────${R}"
+Atas="${C}┌$Garis┐${R}"
+Tengah="${C}├$Garis┤${R}"
+Bawah="${C}└$Garis┘${R}"
+
+# --- SYSTEM CHECK ---
+# Pattern TROJAN (#!) sesuai script asli Anda
+GREP_PATTERN="^#!"
+CONFIG_FILE="/etc/xray/config.json"
+BACKUP_FILE="/etc/xray/trojan_backup" # <-- File Backup
 dateFromServer=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Date | sed -e 's/< Date: //')
 biji=`date +"%Y-%m-%d" -d "$dateFromServer"`
-# Color
-RED='\033[0;31m'
-NC='\033[0m'
-GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-red='\e[1;31m'
-green='\e[0;32m'
-NC='\e[0m'
-red='\e[1;31m'
-green='\e[0;32m'
-NC='\e[0m'
-green() { echo -e "\\033[32;1m${*}\\033[0m"; }
-red() { echo -e "\\033[31;1m${*}\\033[0m"; }
-clear
 
+# ==========================================
+#   LOOPING UTAMA
+# ==========================================
+while true; do
+    clear
+    echo -e ""
+    echo -e "          ${Kedip}${K}🗑️  DELETE TROJAN ACCOUNT 🗑️${R}"
+    echo -e ""
 
-NUMBER_OF_CLIENTS=$(grep -c -E "^#! " "/etc/xray/config.json")
-	if [[ ${NUMBER_OF_CLIENTS} == '0' ]]; then
-		echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-        echo -e "         Hapus Akun Trojan             "
-        echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-		echo ""
-		echo "Anda Tidak Memiliki Member Trojan"
-		echo ""
-		echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-		read -n 1 -s -r -p "Press any key to back"
+    # --- 1. AMBIL DATA USER KE ARRAY ---
+    # Mengambil user berdasarkan pattern #!
+    mapfile -t user_list < <(grep -E "$GREP_PATTERN " "$CONFIG_FILE" | cut -d ' ' -f 2 | sort | uniq)
+    total_client=${#user_list[@]}
+
+    # --- CEK JIKA KOSONG ---
+    if [[ ${total_client} == '0' ]]; then
+        echo -e "$Atas"
+        echo -e "$ki${BG_M}                   NO CLIENT DATA                    ${R}$ka"
+        echo -e "$Tengah"
+        printf "$ki ${M}%-53s${R}$ka\n" "You have no existing clients!"
+        echo -e "$Bawah"
+        echo ""
+        read -n 1 -s -r -p " Press any key to back on menu"
         m-trojan
-	fi
+        break
+    fi
 
-	clear
-	echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo -e "          Hapus Akun Trojan            "
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo "  User       Expired  " 
-	echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-	grep -E "^#! " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | column -t | sort | uniq
-    echo ""
-    red "tap enter to go back"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-	read -rp "Ketik Usernamenya : " user
-    if [ -z $user ]; then
-    m-trojan
+    # --- 2. TAMPILKAN LIST USER ---
+    echo -e "$Atas"
+    echo -e "$ki${BG_K}                     LIST TROJAN USER                  ${R}$ka"
+    echo -e "$Tengah"
+    
+    # Header Kolom
+    printf "$ki ${P}%-4s %-20s %-12s %-15s${R}$ka\n" "NO" "USER" "EXPIRED" "STATUS"
+    echo -e "$Tengah"
+
+    no=1
+    now_sec=$(date +%s)
+
+    for user in "${user_list[@]}"; do
+        # Ambil tanggal expired
+        exp=$(grep -wE "$GREP_PATTERN $user" "$CONFIG_FILE" | cut -d ' ' -f 3 | sort | uniq)
+        
+        # --- LOGIKA HITUNG HARI (STATUS) ---
+        exp_sec=$(date -d "$exp" +%s)
+        diff=$(( (exp_sec - now_sec) / 86400 ))
+        
+        if [[ $diff -ge 1 ]]; then
+            sts_color="${Kedip}${H}"
+            sts_text="${diff} Days"
+        elif [[ $diff -eq 0 ]]; then
+            sts_color="${K}"
+            sts_text="Today"
+        else
+            sts_color="${M}"
+            sts_text="Expired"
+        fi
+
+        # Print Baris Tabel
+        printf "$ki ${C}%-4s ${P}%-20s ${K}%-12s ${sts_color}%-15s${R}$ka\n" "$no)" "$user" "$exp" "$sts_text"
+        ((no++))
+    done
+    
+    # --- MENU KEMBALI ---
+    echo -e "$Tengah"
+    printf "$ki  ${M}%-53s${R}$ka\n" "0)  BACK TO MAIN MENU"
+    echo -e "$Bawah"
+    echo -e ""
+    echo -e " ${P}Select user to delete (Number/Name)${R}"
+    echo -e " ${C}───────────────────────────────────────────────────────${R}"
+
+    # --- 3. INPUT PILIHAN ---
+    echo -ne " ${C}➤ Select User : ${P}"
+    read selection
+
+    # A. Validasi Input Kosong
+    if [ -z "$selection" ]; then continue; fi
+    # B. Menu Exit
+    if [[ "$selection" == "0" ]]; then m-trojan; break; fi
+
+    # C. Cek Input (Angka vs Nama)
+    if [[ $selection =~ ^[0-9]+$ ]]; then
+        if [[ $selection -ge 1 && $selection -le $total_client ]]; then
+            user="${user_list[$((selection-1))]}"
+        else
+            echo -e " ${M}[!] Error: Number out of range!${R}"; sleep 1; continue
+        fi
     else
-    exp=$(grep -wE "^#! $user" "/etc/xray/config.json" | cut -d ' ' -f 3 | sort | uniq)
+        user="$selection"
+        if ! grep -qws "$GREP_PATTERN $user" "$CONFIG_FILE"; then
+            echo -e " ${M}[!] Error: Username not found!${R}"; sleep 1; continue
+        fi
+    fi
+
+    # ==========================================
+    # 4. PROSES BACKUP & DELETE (NEW LOGIC)
+    # ==========================================
+    
+    # --- A. BACKUP KE RECYCLE BIN ---
+    # Logika Trojan: Password biasanya ada di dalam block JSON setelah komen #!
+    # Kita grep pattern user, baca baris bawahnya, cari field "password"
+    pass_trojan=$(grep -wE "^#! $user" -A 3 "$CONFIG_FILE" | grep "password" | awk -F '"' '{print $4}' | head -n 1)
+    
+    ARCHIVED="NO"
+    if [[ -n "$pass_trojan" ]]; then
+        # Pastikan file backup ada
+        if [[ ! -f "$BACKUP_FILE" ]]; then touch "$BACKUP_FILE"; fi
+        
+        # Cek duplikat (Format: user password)
+        if ! grep -q "^$user " "$BACKUP_FILE"; then
+            echo "$user $pass_trojan" >> "$BACKUP_FILE"
+            ARCHIVED="YES"
+        else
+            ARCHIVED="ALREADY"
+        fi
+    fi
+
+    # --- B. DELETE DARI SYSTEM ---
+    exp=$(grep -wE "$GREP_PATTERN $user" "$CONFIG_FILE" | cut -d ' ' -f 3 | sort | uniq)
+
+    # Hapus dari Config (Pattern #!)
     sed -i "/^#! $user $exp/,/^},{/d" /etc/xray/config.json
-    sed -i "/### $user $exp/,/^},{/d" /etc/trojan/.trojan.db
+    sed -i "/^#! $user $exp/,/^},{/d" /etc/trojan/.trojan.db
+    
+    # Hapus File Tambahan
     rm -rf /etc/trojan/$user
     rm -rf /etc/mastoni/limit/trojan/ip/$user
+    
+    # Restart Service
     systemctl restart xray > /dev/null 2>&1
+
+    # --- 5. TAMPILAN SUKSES ---
     clear
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo "  Akun Trojan Berhasil Di Hapus         "
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo " Client Name : $user"
-    echo " Expired On  : $exp"
-    echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo ""
+    echo -e ""
+    echo -e "          ${Kedip}${K}✅ ACCOUNT DELETED SUCCESSFULLY ✅${R}"
+    echo -e ""
+    echo -e "$Atas"
+    echo -e "$ki${BG_G}                    DELETED DETAILS                    ${R}$ka"
+    echo -e "$Tengah"
+    
+    # Detail Hapus
+    printf "$ki ${P}%-20s ${C}: ${M}%-30s${R}$ka\n" "Client Name" "$user"
+    printf "$ki ${P}%-20s ${C}: ${K}%-30s${R}$ka\n" "Expired On" "$exp"
+    printf "$ki ${P}%-20s ${C}: ${P}%-30s${R}$ka\n" "Deleted On" "$biji"
+
+    # Info Backup
+    if [[ "$ARCHIVED" == "YES" ]]; then
+        printf "$ki ${P}%-20s ${C}: ${H}%-30s${R}$ka\n" "Recycle Bin" "SAVED (Ready to Restore)"
+    elif [[ "$ARCHIVED" == "ALREADY" ]]; then
+        printf "$ki ${P}%-20s ${C}: ${K}%-30s${R}$ka\n" "Recycle Bin" "Already Archived"
     fi
+
+    echo -e "$Bawah"
+    echo -e ""
+    
+    echo -e "${C} Account deleted. Returning to list...${R}"
+    read -n 1 -s -r -p " Press any key to continue"
+    # Script akan mengulang (refresh list)
+done

@@ -1,11 +1,7 @@
 #!/bin/bash
 # ==========================================
-#  SSH & ZIVPN PREMIUM CREATOR (FULL STYLE + BLINK)
+#  SSH & SLOWDNS CREATOR (FULL STYLE + BLINK)
 # ==========================================
-
-# --- CONFIG ZIVPN ---
-ZIVPN_CONFIG="/etc/zivpn/config.json"
-ZIVPN_DB="/etc/zivpn/user-db.json"
 
 clear
 #IZIN SCRIPT
@@ -40,7 +36,7 @@ checking_sc() {
     echo -e "   \033[0;33mYour VPS${NC} $ipsaya \033[0;33mHas been Banned${NC}"
     echo -e "     \033[0;33mBuy access permissions for scripts${NC}"
     echo -e "             \033[0;33mContact Admin :${NC}"
-    echo -e "       ${GREEN}TELEGRAM${NC} https://t.me/MastoniOrderBot"
+    echo -e "       ${GREEN}TELEGRAM${NC} https://t.me/Mastonigt"
     echo -e "       ${GREEN}WHATS APP ${NC} 085325108022"
     echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
     exit 0
@@ -53,38 +49,30 @@ ISP=$(cat /root/.info/.isp)
 CITY=$(cat /root/.info/.city)
 IP=$(curl -sS ipv4.icanhazip.com)
 domain=$(cat /etc/xray/domain)
-PUB=$(cat /etc/slowdns/server.pub)
-NS=$(cat /etc/xray/dns)
+domain_hasil=$(cat /root/nsdomain 2>/dev/null)
+PUB=$(cat /etc/slowdns/server.pub 2>/dev/null)
 CHATID=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 3)
 KEY=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 2)
 URL="https://api.telegram.org/bot$KEY/sendMessage"
 
-# Cek Port ZiVPN (Default 5667 jika tidak ketemu)
-if [[ -f "$ZIVPN_CONFIG" ]]; then
-    UDP_ZIVPN=$(grep -o '"listen": *"[^"]*"' $ZIVPN_CONFIG | cut -d'"' -f4 | sed 's/://g' | sed 's/0.0.0.0//g')
-else
-    UDP_ZIVPN="5667"
-fi
-[ -z "$UDP_ZIVPN" ] && UDP_ZIVPN="5667"
-
 clear
 # --- INPUT DATA ---
 echo -e "\033[1;93m☉————————————————————————☉\033[0m"
-echo -e " Create SSH & ZIVPN Account"
+echo -e " Create SSH & SLOWDNS Account"
 echo -e "\033[1;93m☉————————————————————————☉\033[0m"
 read -p " Username      : " Login
 read -p " Password      : " Pass
 read -p " Limit IP      : " iplimit
 read -p " Limit Quota   : " Quota
-read -p " Expired Days : " masaaktif
+read -p " Expired Days  : " masaaktif
 
 # --- VALIDASI INPUT ---
-if [[ -z "$Login" || -z "$Pass" ]]; then
-    echo -e "${RED}Error: Username & Password tidak boleh kosong!${NC}"
+if [[ -z "$Login" || -z "$Pass" || -z "$masaaktif" ]]; then
+    echo -e "${RED}Error: Username, Password, & Expired Days tidak boleh kosong!${NC}"
     exit 1
 fi
 
-# --- 1. PROSES SSH ---
+# --- 1. PROSES SSH & SLOWDNS ---
 # Limit IP SSH
 if [[ $iplimit -gt 0 ]]; then
     mkdir -p /etc/kyt/limit/ssh/ip
@@ -100,16 +88,15 @@ tgl2=$(date +"%d")
 bln2=$(date +"%b")
 thn2=$(date +"%Y")
 tnggl="$tgl2 $bln2, $thn2"
-exp_date_iso=$(date -d "$masaaktif days" +"%Y-%m-%d") # Format untuk JSON
 
-# Create User System (FIXED: -m membuat home dir)
+# Create User System (Berlaku untuk SSH dan SlowDNS)
 useradd -e `date -d "$masaaktif days" +"%Y-%m-%d"` -s /bin/false -m $Login
 echo -e "$Pass\n$Pass\n"|passwd $Login &> /dev/null
 
 # --- ADD: MONITORING USER (IPTABLES) ---
 # Memasang meteran hitung data untuk user baru
 iptables -I OUTPUT -m owner --uid-owner $Login -j ACCEPT
-iptables -I INPUT -m owner --uid-owner $Login -j ACCEPT
+#iptables -I INPUT -m owner --uid-owner $Login -j ACCEPT
 # Simpan rule jika iptables-persistent terinstall
 if command -v netfilter-persistent &> /dev/null; then
    netfilter-persistent save &> /dev/null
@@ -130,36 +117,15 @@ if [ -f /etc/ssh/.ssh.db ]; then
 fi
 echo "#ssh# ${Login} ${Pass} ${Quota} ${iplimit} ${expe}" >>/etc/ssh/.ssh.db
 
-
-# --- 2. PROSES INTEGRASI ZIVPN (AUTO) ---
-if [ -f "$ZIVPN_CONFIG" ]; then
-    # Backup config sebelum edit
-    cp "$ZIVPN_CONFIG" "${ZIVPN_CONFIG}.bak"
-     
-    # Tambah Username ke Config ZiVPN (Cek duplicate dulu)
-    if ! jq -e ".auth.config | index(\"$Login\")" "$ZIVPN_CONFIG" > /dev/null; then
-          jq --arg user "$Login" '.auth.config += [$user]' "$ZIVPN_CONFIG" > "${ZIVPN_CONFIG}.tmp" && mv "${ZIVPN_CONFIG}.tmp" "$ZIVPN_CONFIG"
-    fi
-
-    # Tambah Expired ke User DB ZiVPN
-    if [ ! -f "$ZIVPN_DB" ]; then echo "{}" > "$ZIVPN_DB"; fi
-    jq --arg u "$Login" --arg e "$exp_date_iso" \
-        '.[$u] = {exp: $e}' "$ZIVPN_DB" > "${ZIVPN_DB}.tmp" && mv "${ZIVPN_DB}.tmp" "$ZIVPN_DB"
-
-    # Restart Service
-    systemctl restart zivpn
-fi
-
 clear
 
-# --- 3. OUTPUT FILE (HTML) ---
+# --- 2. OUTPUT FILE (HTML) ---
 cat > /var/www/html/ssh-$Login.txt <<-END
 ◇━━━━━━━━━━━━━━━━━◇
-Format SSH & ZIVPN Account
+Format SSH & SLOWDNS Account
 ◇━━━━━━━━━━━━━━━━━◇
 Username         : $Login
 Password         : $Pass
-ZIVPN Token      : $Login
 ◇━━━━━━━━━━━━━━━━━◇
 IP               : $IP
 Host             : $domain
@@ -167,31 +133,39 @@ Port OpenSSH     : 443, 80, 22
 Port Dropbear    : 443, 109
 Port SSH WS      : 80, 8080
 Port SSH SSL WS  : 443
-Port ZIVPN UDP   : $UDP_ZIVPN (All Port)
+Port SlowDNS     : 53
 ◇━━━━━━━━━━━━━━━━━◇
 Aktif Selama     : $masaaktif Hari
 Dibuat Pada      : $tnggl
 Berakhir Pada    : $expe
 ◇━━━━━━━━━━━━━━━━━◇
+SETTING SLOWDNS  :
+SSH Format       : $domain:22@$Login:$Pass
+DNS IP           : $IP
+NS Domain        : $domain_hasil
+Pub Key          : $PUB
+◇━━━━━━━━━━━━━━━━━◇
+SETTING UDP-COSTUM :
+$domain:1-65535@$Login:$Pass
+◇━━━━━━━━━━━━━━━━━◇
+CONTOH :
 Payload WSS: GET wss://BUG.COM/ HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf] 
 ◇━━━━━━━━━━━━━━━━━◇
 OVPN Download : https://$domain:81/
 ◇━━━━━━━━━━━━━━━━━◇
 END
 
-# --- 4. OUTPUT TELEGRAM (FULL STYLE) ---
+# --- 3. OUTPUT TELEGRAM (FULL STYLE) ---
 TEXT="
 <code>☉——————————————————————————☉</code>
-<code>☘️Success Create SSH & ZIVPN☘️</code>
+<code>☘️Success Create SSH & SLOWDNS☘️</code>
 <code>☉——————————————————————————☉</code>
 <code>Username         : </code> <code>$Login</code>
 <code>Password         : </code> <code>$Pass</code>
-<code>ZIVPN Token      : </code> <code>$Login</code>
 <code>Limit Ip         : </code> <code>$iplimit</code>
 <code>☉——————————————————————————☉</code>
 <code>Host             : </code> <code>$domain</code>
 <code>Limit Quota      : </code> <code>$Quota</code>
-<code>Host Slowdns     : </code> <code>$NS</code>
 <code>IP               : $IP</code>
 <code>ISP              : $ISP</code>
 <code>CITY             : $CITY</code>
@@ -199,7 +173,6 @@ TEXT="
 <code>Port Dropbear    : 443, 109</code>
 <code>Port SSH WS      : 80, 8080, 8081-9999 </code>
 <code>Port SSH UDP     : 1-65535 </code>
-<code>Port ZIVPN UDP   : $UDP_ZIVPN </code>
 <code>Port SSH SSL WS  : 443</code>
 <code>Port SSL/TLS     : 400-900</code>
 <code>Port OVPN WS SSL : 443</code>
@@ -207,13 +180,17 @@ TEXT="
 <code>Port OVPN TCP    : 443, 1194</code>
 <code>Port OVPN UDP    : 2200</code>
 <code>BadVPN UDP       : 7100, 7300, 7300</code>
-<code>Pub Key          : </code> <code>$PUB</code>
 <code>☉——————————————————————————☉</code>
-<code>SSH WS       : </code>
+<code>SlowDNS NS       : </code> <code>$domain_hasil</code>
+<code>SlowDNS Pub      : </code> <code>$PUB</code>
+<code>☉——————————————————————————☉</code>
+<code>SLOWDNS FORMAT   : </code>
+<code>$domain:22@${Login}:${Pass}</code>
+<code>SSH WS           : </code>
 <code>$domain:80@${Login}:${Pass}</code>
-<code>SSH SSL      : </code>
+<code>SSH SSL          : </code>
 <code>$domain:443@${Login}:${Pass}</code>
-<code>SSH UDP      : </code>
+<code>SSH UDP          : </code>
 <code>$domain:1-65535@${Login}:${Pass}</code>
 <code>☉——————————————————————————☉</code>
 <code>🧿Payload WS       : 🧿</code><code>GET / HTTP/1.1[crlf]host: $domain[crlf]Upgrade: Websocket[crlf][crlf]</code>
@@ -232,37 +209,46 @@ Berakhir Pada        : $expe
 <code>☉——————————————————————————☉</code>
 "
 
-curl -s --max-time 10 -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
+# FIX NOTIFIKASI TELEGRAM DI SINI
+curl -s --max-time 10 -X POST "$URL" \
+  -d "chat_id=$CHATID" \
+  -d "disable_web_page_preview=1" \
+  -d "parse_mode=html" \
+  --data-urlencode "text=$TEXT" >/dev/null
 
-# --- 5. OUTPUT TERMINAL (FULL STYLE - SESUAI FILE ASLI) ---
+# --- 4. OUTPUT TERMINAL (FULL STYLE - SESUAI FILE ASLI) ---
 clear
 echo ""
 echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/user-create/user.log
-echo -e "🔵 Success Create SSH & ZIVPN 🔵" | tee -a /etc/user-create/user.log
+echo -e "🔵 Success Create SSH & SLOWDNS 🔵" | tee -a /etc/user-create/user.log
 echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/user-create/user.log
 echo -e "➤ Domain        : $domain" | tee -a /etc/user-create/user.log
 echo -e "➤ Username      : $Login" | tee -a /etc/user-create/user.log
 echo -e "➤ Password      : $Pass" | tee -a /etc/user-create/user.log
-echo -e "➤ ZIVPN Token   : $Login" | tee -a /etc/user-create/user.log
 echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/user-create/user.log
 echo -e "➤ Limit Ip      : $iplimit Device" | tee -a /etc/user-create/user.log
 echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/user-create/user.log
 echo -e "➤ IP            : $IP" | tee -a /etc/user-create/user.log
 echo -e "➤ Limit Quota   : $Quota GB" | tee -a /etc/user-create/user.log
-echo -e "➤ Host Slowdns  : ${NS}" | tee -a /etc/user-create/user.log
 echo -e "➤ Isp           : $ISP" | tee -a /etc/user-create/user.log
 echo -e "➤ Location      : $CITY" | tee -a /etc/user-create/user.log
 echo -e "➤ Port OpenSSH  : 443, 80, 22" | tee -a /etc/user-create/user.log
 echo -e "➤ Port DNS      : 443, 53 ,22 " | tee -a /etc/user-create/user.log
 echo -e "➤ Port SSH UDP  : 1-65535" | tee -a /etc/user-create/user.log
-echo -e "➤ Port ZIVPN    : $UDP_ZIVPN" | tee -a /etc/user-create/user.log
 echo -e "➤ Port Dropbear : 443, 109" | tee -a /etc/user-create/user.log
 echo -e "➤ Port SSH WS   : 80, 8080, 8880, 2082" | tee -a /etc/user-create/user.log
 echo -e "➤ Port OVPN SSL : 443" | tee -a /etc/user-create/user.log
 echo -e "➤ Port OVPN TCP : 443, 1194" | tee -a /etc/user-create/user.log
 echo -e "➤ Port OVPN UDP : 2200" | tee -a /etc/user-create/user.log
 echo -e "➤ BadVPN UDP    : 7100, 7300, 7300" | tee -a /etc/user-create/user.log
-echo -e "➤ Pub Key       : ${PUB}" | tee -a /etc/user-create/user.log
+echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/user-create/user.log
+echo -e "➤ \033[1;33mFORMAT SLOWDNS / HTTP CUSTOM\033[0m" | tee -a /etc/user-create/user.log
+echo -e "➤ \033[1;36mSSH Akun\033[0m      : \033[1;32m$domain:22@${Login}:${Pass}\033[0m" | tee -a /etc/user-create/user.log
+echo -e "➤ \033[1;36mDNS IP\033[0m        : \033[1;32m$IP\033[0m" | tee -a /etc/user-create/user.log
+echo -e "➤ \033[1;36mNS Domain\033[0m     : \033[1;32m$domain_hasil\033[0m" | tee -a /etc/user-create/user.log
+echo -e "➤ \033[1;36mPublic Key\033[0m    : \033[1;32m${PUB}\033[0m" | tee -a /etc/user-create/user.log
+echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/user-create/user.log
+echo -e "➤ \033[1;36mSSH UDP\033[0m       : \033[1;32m$domain:1-65535@${Login}:${Pass}\033[0m" | tee -a /etc/user-create/user.log
 echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" | tee -a /etc/user-create/user.log
 echo -e "𝗣𝗮𝘆𝗹𝗼𝗮𝗱 𝗪𝗲𝗯𝘀𝗼𝗰𝗸𝗲𝘁 :
 GET / HTTP/1.1[crlf]host: $domain[crlf]Upgrade: Websocket[crlf][crlf]" | tee -a /etc/user-create/user.log

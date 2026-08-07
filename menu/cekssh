@@ -1,141 +1,217 @@
 #!/bin/bash
+# ==========================================
+#  MASTONI GANTENG: ZIVPN MANAGER V7.3.1 (Fixed Realtime Data Usage)
+#  Ultimate: V6.4 Design + Realtime Kernel Usage Tracker
+#  FIXED ENGINE: Hybrid Core (OpenSSH User + Dropbear Root Tracker)
+# ==========================================
 
-# ===============================================
-# Skrip untuk menampilkan sesi login aktif
-# Versi dengan tampilan modern, gradasi warna,
-# ikon, dan efek blink untuk user aktif
-# ===============================================
+USAGE_DB="/etc/ssh/usage_db"
+mkdir -p "$USAGE_DB"
 
-# Warna dan Format
-BOLD='\033[1m'
 NC='\033[0m'
-BLINK='\033[5m'
-# Gradasi Warna Ungu-Biru
-COLOR1='\033[38;5;93m'  # Ungu
-COLOR2='\033[38;5;105m' # Ungu Muda
-COLOR3='\033[38;5;111m' # Biru Ungu
-COLOR4='\033[38;5;117m' # Biru Terang
-HEADER_BG='\033[48;5;236m' # Latar abu-abu gelap untuk header
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+YELLOW='\033[0;33m'
+PURPLE='\033[0;35m'
+BLUE='\033[0;34m'
 
-# Ikon
-ICON_USER='\xF0\x9F\x94\x91'  # Ikon kunci
-ICON_SSH='\xF0\x9F\x9A\x80'    # Ikon roket
-ICON_DB='\xF0\x9F\x90\x9B'     # Ikon lebah (Dropbear)
-ICON_VPN='\xF0\x9F\x93\xA3'    # Ikon sinyal
-ICON_ACTIVE='\xF0\x9F\x94\x94' # Ikon api (untuk aktif)
+BORDER_LINE="────────────────────────────────────────────────────────────"
+TOP_LINE="╭────────────────────────────────────────────────────────────────────╮"
+MID_LINE="├────────────────────────────────────────────────────────────────────┤"
+BOT_LINE="╰────────────────────────────────────────────────────────────────────╯"
 
-# --- Fungsi untuk Header Gradasi ---
-function print_header {
-  echo -e "${COLOR1}╭──────────────────────────────────────────────────────╮${NC}"
-  echo -e "${COLOR1}│${HEADER_BG}${BOLD}${COLOR4}   S E S S I O N   M O N I T O R   ${NC}${COLOR1}│${NC}"
-  echo -e "${COLOR1}╰──────────────────────────────────────────────────────╯${NC}"
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        r_start=255; g_start=215; b_start=0;
+        r_mid=0;     g_mid=128;   b_mid=255;
+        r_end=138;   g_end=43;    b_end=226;
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(r_start + (r_mid - r_start) * f);
+                g = int(g_start + (g_mid - g_start) * f);
+                b = int(b_start + (b_mid - b_start) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(r_mid + (r_end - r_mid) * f);
+                g = int(g_mid + (g_end - g_mid) * f);
+                b = int(b_mid + (b_end - b_mid) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
 }
 
-# --- Fungsi untuk Garis Pembatas Gradasi ---
-function print_line {
-  echo -e "${COLOR1}├${COLOR2}────────────────────────────────────────────────────${COLOR1}┤${NC}"
-}
-
-function print_footer {
-  echo -e "${COLOR1}╰──────────────────────────────────────────────────────╯${NC}"
+bytes_to_human() {
+    local b=${1:-0}
+    local d=''
+    local s=0
+    local S=(B KB MB GB TB PB)
+    while ((b > 1024)); do
+        d="$(printf ".%02d" $((b % 1024 * 100 / 1024)))"
+        b=$((b / 1024))
+        let s++
+    done
+    echo "$b$d ${S[$s]}"
 }
 
 clear
-echo ""
-print_header
-echo ""
+echo -e ""
+print_gradient "╭════════════════════════════════════════════════════════════════════╮"
+print_gradient "│            MASTONI GANTENG MONITOR (V7.3.1 STABLE)                   │"
+print_gradient "╰════════════════════════════════════════════════════════════════════╯"
+echo -e ""
 
-# Menentukan file log yang digunakan
-if [ -e "/var/log/auth.log" ]; then
-    LOG="/var/log/auth.log";
-elif [ -e "/var/log/secure" ]; then
-    LOG="/var/log/secure";
+start_spinner() {
+    local delay=0.1
+    local spinstr='|/-\'
+    while true; do
+        local temp=${spinstr#?}
+        printf " \r ${CYAN}⏳ Membaca Data & Traffic Realtime... [%c]${NC}" "$spinstr"
+        local spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+    done
+}
+start_spinner &
+SPIN_PID=$!
+trap "kill $SPIN_PID 2>/dev/null; exit" SIGINT
+
+BUFFER_ONLINE=""
+BUFFER_OFFLINE=""
+total_ssh=0; total_online=0; total_offline=0
+
+declare -A active_counts
+declare -A user_vpntype
+declare -A user_realtime_bytes
+
+# 1. PEMETAAN LIVE DROPBEAR (Mencari PID aktif yang terdaftar sukses di auth log)
+dropbear_pids=$(ps ax 2>/dev/null | grep "[d]ropbear" | awk '{print $1}')
+for pid in $dropbear_pids; do
+    log_entry=$(grep -E "dropbear\[$pid\]: (Password|Pubkey) auth succeeded" /var/log/auth.log /var/log/auth.log.1 2>/dev/null | tail -n 1)
+    if [[ -n "$log_entry" ]]; then
+        duser=$(echo "$log_entry" | awk -F'for ' '{print $2}' | awk '{print $1}' | tr -d "'")
+        if [[ -n "$duser" ]]; then
+            active_counts["$duser"]=$((active_counts["$duser"] + 1))
+            user_vpntype["$duser"]="Dropbear"
+            
+            if [[ -r "/proc/$pid/io" ]]; then
+                pid_bytes=$(awk '/^rchar:/ {r=$2} /^wchar:/ {w=$2} END {print r+w}' "/proc/$pid/io" 2>/dev/null)
+                if [[ -n "$pid_bytes" && "$pid_bytes" =~ ^[0-9]+$ ]]; then
+                    user_realtime_bytes["$duser"]=$((user_realtime_bytes["$duser"] + pid_bytes))
+                fi
+            fi
+        fi
+    fi
+done
+
+# 2. PEMETAAN LIVE OPENSSH & RENDER DATA UTAMA
+while IFS=: read -r username _ uid _ _ _ shell; do
+    if [[ "$shell" == "/bin/false" || "$shell" == "/usr/sbin/nologin" || "$shell" == "/bin/bash" ]]; then
+        ((total_ssh++))
+
+        # Hitung Proses Valid OpenSSH
+        sshd_pids=$(ps -u "$username" -o pid,comm 2>/dev/null | grep "[s]shd")
+        ssh_cnt=$(echo "$sshd_pids" | grep -c "sshd")
+
+        if [[ "$ssh_cnt" -gt 0 ]]; then
+            active_counts["$username"]=$((active_counts["$username"] + ssh_cnt))
+            user_vpntype["$username"]="OpenSSH"
+            
+            pids_only=$(echo "$sshd_pids" | awk '{print $1}')
+            for pid in $pids_only; do
+                if [[ -r "/proc/$pid/io" ]]; then
+                    pid_bytes=$(awk '/^rchar:/ {r=$2} /^wchar:/ {w=$2} END {print r+w}' "/proc/$pid/io" 2>/dev/null)
+                    if [[ -n "$pid_bytes" && "$pid_bytes" =~ ^[0-9]+$ ]]; then
+                        user_realtime_bytes["$username"]=$((user_realtime_bytes["$username"] + pid_bytes))
+                    fi
+                fi
+            done
+        fi
+
+        cnt=${active_counts["$username"]:-0}
+        
+        db_file="$USAGE_DB/$username.total"
+        db_bytes=0
+        if [[ -f "$db_file" ]]; then
+            db_bytes=$(cat "$db_file" 2>/dev/null)
+            if ! [[ "$db_bytes" =~ ^[0-9]+$ ]]; then db_bytes=0; fi
+        fi
+
+        if [[ "$cnt" -gt 0 ]]; then
+            ((total_online++))
+            tipe=${user_vpntype["$username"]}
+            ip_display_list="HAProxy/WS "
+
+            if [[ -f "/etc/kyt/limit/ssh/ip/$username" ]]; then
+                limit_ip=$(cat "/etc/kyt/limit/ssh/ip/$username")
+                # Auto-scale tampilan max proses: limit_ip x 2
+                max_proses=$((limit_ip * 2)) 
+            else
+                limit_ip="-"
+                max_proses="-"
+            fi
+            
+            if [[ "$limit_ip" != "-" && "$cnt" -gt "$max_proses" ]]; then
+                limit_info="${RED}$cnt (Batas Limit: $limit_ip Device / Max: $max_proses Proses) ⚠️ OVERLIMIT${NC}"
+            else
+                limit_info="${WHITE}$cnt ${CYAN}(Limit: $limit_ip Device / Max: $max_proses Proses)${NC}"
+            fi
+
+            live_p_bytes=${user_realtime_bytes["$username"]:-0}
+            total_active_bytes=$((db_bytes + live_p_bytes))
+            human_total=$(bytes_to_human "$total_active_bytes")
+
+            BUFFER_ONLINE+=" ${CYAN}${BORDER_LINE}${NC}\n"
+            BUFFER_ONLINE+=" ${WHITE}Status     ${NC}: ${GREEN}🟢 ONLINE${NC}\n"
+            BUFFER_ONLINE+=" ${WHITE}Username   ${NC}: ${YELLOW}$username${NC}\n"
+            BUFFER_ONLINE+=" ${WHITE}IP Address ${NC}: ${CYAN}$ip_display_list${NC}\n"
+            BUFFER_ONLINE+=" ${WHITE}Port Masuk ${NC}: ${PURPLE}443/80 (Via Proxy)${NC}\n"
+            BUFFER_ONLINE+=" ${WHITE}Proses Lgn ${NC}: $limit_info\n"
+            BUFFER_ONLINE+=" ${WHITE}Tipe VPN   ${NC}: ${BLUE}$tipe${NC}\n"
+            BUFFER_ONLINE+=" ${WHITE}Data Usage ${NC}: ${GREEN}$human_total${NC}\n"
+        else
+            ((total_offline++))
+            human_total_off=$(bytes_to_human "$db_bytes")
+            printf -v row "${CYAN} │ ${RED}%-4s ${RED}%-12s ${WHITE}%-15s ${WHITE}%-5s ${WHITE}%-3s ${RED}%-9s ${WHITE}%-10s   ${CYAN}│${NC}\n" "OFF" "${username:0:12}" "-" "-" "-" "OFFLINE" "${human_total_off:0:10}"
+            BUFFER_OFFLINE+="$row"
+        fi
+    fi
+done < <(awk -F: '$3 >= 1000 && $1 != "nobody" {print $0}' /etc/passwd)
+
+kill "$SPIN_PID" 2>/dev/null
+wait "$SPIN_PID" 2>/dev/null
+echo -ne "\r\033[K"
+
+echo -e " ${GREEN}>>> DAFTAR USER ONLINE <<<${NC}"
+if [[ -z "$BUFFER_ONLINE" ]]; then
+     echo -e " ${YELLOW}(Tidak ada user online saat ini)${NC}\n"
 else
-    echo -e "${BOLD}\n${RED}File log /var/log/auth.log atau /var/log/secure tidak ditemukan.${NC}\n"
-    exit 1
+    echo -e "${BUFFER_ONLINE}"
 fi
+echo -e " ${CYAN}${BORDER_LINE}${NC}"
+echo -e ""
 
-# ===========================================
-#  Sesi Dropbear Aktif
-# ===========================================
-echo -e "${BOLD}${COLOR1}╭──────────────────────────────────────────────────────╮${NC}"
-echo -e "${BOLD}${HEADER_BG}${COLOR4}  ${ICON_DB}  Dropbear Active Sessions  ${NC}"
-echo -e "${BOLD}${COLOR1}├──────────────────────────────────────────────────────┤${NC}"
-printf "${COLOR2} %-5s | %-12s | %-15s | %-8s ${NC}\n" "PID" "Username" "IP Address" "Status"
-echo -e "${BOLD}${COLOR1}├──────────────────────────────────────────────────────┤${NC}"
-data=( `ps aux | grep -i dropbear | awk '{print $2}'`);
-cat $LOG | grep -i dropbear | grep -i "Password auth succeeded" > /tmp/login-db-dropbear.txt;
-for PID in "${data[@]}"
-do
-    cat /tmp/login-db-dropbear.txt | grep "dropbear\[$PID\]" > /tmp/login-db-pid.txt;
-    NUM=`cat /tmp/login-db-pid.txt | wc -l`;
-    if [ $NUM -eq 1 ]; then
-        USER=`cat /tmp/login-db-pid.txt | awk '{print $10}'`;
-        IP=`cat /tmp/login-db-pid.txt | awk '{print $12}'`;
-        printf " ${COLOR3}%-5s | %-12s | ${BLINK}${COLOR4}%-15s${NC}${COLOR3} | ${BOLD}${COLOR4}Aktif${NC} ${ICON_ACTIVE}\n" "$PID" "$USER" "$IP"
-    fi
-done
-echo -e "${BOLD}${COLOR1}╰──────────────────────────────────────────────────────╯${NC}"
+echo -e "${CYAN} ${TOP_LINE}${NC}"
+printf "${CYAN} │ ${WHITE}%-4s %-12s %-15s %-5s %-3s %-9s %-10s   ${CYAN}│${NC}\n" "Sts" "Username" "IP Address" "Port" "Lgn" "Tipe" "Data Usage"
+echo -e "${CYAN} ${MID_LINE}${NC}"
 
-# ===========================================
-#  Sesi SSHD (OpenSSH) Aktif
-# ===========================================
-echo ""
-echo -e "${BOLD}${COLOR1}╭──────────────────────────────────────────────────────╮${NC}"
-echo -e "${BOLD}${HEADER_BG}${COLOR4}  ${ICON_SSH}  OpenSSH Active Sessions  ${NC}"
-echo -e "${BOLD}${COLOR1}├──────────────────────────────────────────────────────┤${NC}"
-printf "${COLOR2} %-5s | %-12s | %-15s | %-8s ${NC}\n" "PID" "Username" "IP Address" "Status"
-echo -e "${BOLD}${COLOR1}├──────────────────────────────────────────────────────┤${NC}"
-cat $LOG | grep -i sshd | grep -i "Accepted password for" > /tmp/login-db-sshd.txt
-data=( `ps aux | grep "sshd: " | grep -v grep | awk '{print $2}'`);
-
-for PID in "${data[@]}"
-do
-    cat /tmp/login-db-sshd.txt | grep "sshd\[$PID\]" > /tmp/login-db-pid.txt;
-    NUM=`cat /tmp/login-db-pid.txt | wc -l`;
-    if [ $NUM -eq 1 ]; then
-        USER=`grep -oP 'Accepted password for \K\S+' /tmp/login-db-pid.txt`;
-        IP=`grep -oP 'from \K[\d\.]+' /tmp/login-db-pid.txt`;
-        printf " ${COLOR3}%-5s | %-12s | ${BLINK}${COLOR4}%-15s${NC}${COLOR3} | ${BOLD}${COLOR4}Aktif${NC} ${ICON_ACTIVE}\n" "$PID" "$USER" "$IP"
-    fi
-done
-echo -e "${BOLD}${COLOR1}╰──────────────────────────────────────────────────────╯${NC}"
-
-# ===========================================
-#  Sesi OpenVPN (TCP & UDP) Aktif
-# ===========================================
-if [ -f "/etc/openvpn/server/openvpn-tcp.log" ] || [ -f "/etc/openvpn/server/openvpn-udp.log" ]; then
-    echo ""
-    echo -e "${BOLD}${COLOR1}╭──────────────────────────────────────────────────────╮${NC}"
-    echo -e "${BOLD}${HEADER_BG}${COLOR4}  ${ICON_VPN}  OpenVPN Active Sessions  ${NC}"
-    echo -e "${BOLD}${COLOR1}├──────────────────────────────────────────────────────┤${NC}"
-    printf "${COLOR2} %-12s | %-15s | %-8s | %-8s ${NC}\n" "Username" "IP Address" "Connected" "Status"
-    echo -e "${BOLD}${COLOR1}├──────────────────────────────────────────────────────┤${NC}"
+if [[ -z "$BUFFER_OFFLINE" ]]; then
+    printf "${CYAN} │ ${YELLOW}%-65s   ${CYAN}│${NC}\n" "                     (Tidak ada user offline)"
+else
+    echo -n "$BUFFER_OFFLINE"
 fi
+echo -e "${CYAN} ${BOT_LINE}${NC}"
+echo -e ""
 
-# OpenVPN TCP
-if [ -f "/etc/openvpn/server/openvpn-tcp.log" ]; then
-    cat /etc/openvpn/server/openvpn-tcp.log | grep -w "^CLIENT_LIST" | cut -d ',' -f 2,3,8 | sed -e 's/,/ | /g' | while read line; do
-        printf " ${COLOR3}%s | ${BLINK}${COLOR4}Aktif${NC} ${ICON_ACTIVE}\n" "$line"
-    done
-fi
-
-# OpenVPN UDP
-if [ -f "/etc/openvpn/server/openvpn-udp.log" ]; then
-    cat /etc/openvpn/server/openvpn-udp.log | grep -w "^CLIENT_LIST" | cut -d ',' -f 2,3,8 | sed -e 's/,/ | /g' | while read line; do
-        printf " ${COLOR3}%s | ${BLINK}${COLOR4}Aktif${NC} ${ICON_ACTIVE}\n" "$line"
-    done
-fi
-
-if [ -f "/etc/openvpn/server/openvpn-tcp.log" ] || [ -f "/etc/openvpn/server/openvpn-udp.log" ]; then
-    echo -e "${BOLD}${COLOR1}╰──────────────────────────────────────────────────────╯${NC}"
-fi
-
-echo ""
-echo -e "${BOLD}${COLOR1}╭──────────────────────────────────────────────────────╮${NC}"
-echo -e "${COLOR3} Total Active Sessions: ${BOLD}${BLINK}${COLOR4}$(who | wc -l)${NC}${COLOR3} ${ICON_USER}${NC}"
-echo -e "${BOLD}${COLOR1}╰──────────────────────────────────────────────────────╯${NC}"
-echo ""
-
-# Membersihkan file temporer
-rm -f /tmp/login-db-*.txt /tmp/login-db-pid.txt /tmp/vpn-login-*.txt
+tgl=$(date +'%H:%M')
+echo -e "${CYAN} ╭────────────────────────────────────────────────────────────────────╮${NC}"
+printf "${CYAN} │ ${WHITE}Total Akun: %-3s ${GREEN}ON: %-3s ${RED}OFF: %-3s ${CYAN}Waktu: %-26s ${CYAN}│${NC}\n" "$total_ssh" "$total_online" "$total_offline" "$tgl"
+echo -e "${CYAN} ╰────────────────────────────────────────────────────────────────────╯${NC}"
+echo -e ""
+read -n 1 -s -r -p " Press any key to back"

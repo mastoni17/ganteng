@@ -1,40 +1,179 @@
 #!/bin/bash
+
 # ==========================================
-# Color
-RED='\033[0;31m'
+#  MASTONI GANTENG - ULTIMATE CLEANER
+# ==========================================
+
+# // Definisi Warna
 NC='\033[0m'
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 ORANGE='\033[0;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-#####BOT
+WHITE='\033[0;37m'
+BOLD='\033[1m'
 
-# ==========================================
-data=(`find /var/log/ -name *.log`);
-for log in "${data[@]}"
-do
-echo "$log clear"
-echo > $log
-done
-data=(`find /var/log/ -name *.err`);
-for log in "${data[@]}"
-do
-echo "$log clear"
-echo > $log
-done
-data=(`find /var/log/ -name mail.*`);
-for log in "${data[@]}"
-do
-echo "$log clear"
-echo > $log
-done
-echo > /var/log/syslog
-echo > /var/log/btmp
-echo > /var/log/messages
-echo > /var/log/debug
+# // Telegram Variables
+CHATID=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 3)
+KEY=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 2)
+export TIME="10"
+export URL="https://api.telegram.org/bot$KEY/sendMessage"
+IPVPS=$(curl -s ipv4.icanhazip.com)
+
+# // Fungsi Gradasi (Sama seperti menu utama)
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        r_start=255; g_start=215; b_start=0;
+        r_mid=0;     g_mid=128;   b_mid=255;
+        r_end=138;   g_end=43;    b_end=226;
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(r_start + (r_mid - r_start) * f);
+                g = int(g_start + (g_mid - g_start) * f);
+                b = int(b_start + (b_mid - b_start) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(r_mid + (r_end - r_mid) * f);
+                g = int(g_mid + (g_end - g_mid) * f);
+                b = int(b_mid + (b_end - b_mid) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+
+# // Fungsi Animasi Progress Bar
+animated_loading() {
+    local label="$1"
+    local pid="$2"
+    local delay=0.1
+    local spinstr='|/-\'
+    
+    # Hide Cursor
+    tput civis
+    
+    echo -ne " ${CYAN}${label} "
+    
+    # Progress Bar Loop
+    # Kita buat fake progress bar agar terlihat smooth
+    for ((i=0; i<=100; i+=2)); do
+        # Calculate bars
+        local bars=$((i / 2))
+        local spaces=$((50 - bars))
+        
+        # Build bar string
+        local bar_str=""
+        for ((j=0; j<bars; j++)); do bar_str="${bar_str}█"; done
+        for ((j=0; j<spaces; j++)); do bar_str="${bar_str}▒"; done
+        
+        # Color logic based on percentage
+        if [ $i -lt 50 ]; then
+            color="${ORANGE}"
+        elif [ $i -lt 90 ]; then
+            color="${PURPLE}"
+        else
+            color="${GREEN}"
+        fi
+        
+        # Print Status
+        printf "\r ${CYAN}${label} ${NC}[${color}%s${NC}] ${color}%d%%${NC}" "$bar_str" "$i"
+        
+        sleep 0.02
+    done
+    
+    echo -e ""
+    tput cnorm
+}
+
+# // Fungsi Membersihkan Log (Backend)
+run_clear_log() {
+    # Hapus Log Extension
+    find /var/log/ -name "*.log" -exec truncate -s 0 {} \;
+    find /var/log/ -name "*.err" -exec truncate -s 0 {} \;
+    find /var/log/ -name "mail.*" -exec truncate -s 0 {} \;
+    
+    # Hapus System Log Spesifik
+    truncate -s 0 /var/log/syslog
+    truncate -s 0 /var/log/btmp
+    truncate -s 0 /var/log/messages
+    truncate -s 0 /var/log/debug
+    
+    # Hapus History Bash (Opsional)
+    history -c
+}
+
+# // Fungsi Membersihkan Cache RAM (Backend)
+run_clear_cache() {
+    # Sync filesystem buffer
+    sync
+    # Drop Caches (PageCache, dentries, and inodes)
+    echo 3 > /proc/sys/vm/drop_caches
+    # Swap Cleaning (Optional, hati-hati jika RAM penuh)
+    # swapoff -a && swapon -a
+}
+
+# // Fungsi Notifikasi Telegram
+send_notif() {
+    local log_size_before=$1
+    local ram_free_before=$2
+    local ram_free_after=$3
+    
+    TEXT="
+<code>◇━━━━━━━━━━━━━━◇</code>
+<b>   ♻️ SYSTEM CLEANED ♻️</b>
+<code>◇━━━━━━━━━━━━━━◇</code>
+<code>DOMAIN   : $(cat /etc/xray/domain 2>/dev/null || echo "$IPVPS")</code>
+<code>IP VPS   : $IPVPS</code>
+<code>STATUS   : SUCCESS ✅</code>
+<code>ACTION   : Clear Log & Cache</code>
+<code>◇━━━━━━━━━━━━━━◇</code>
+<code>BY BOT : Mastoni Ganteng</code>
+"
+    curl -s --max-time $TIME -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
+}
+
+# // MAIN EXECUTION
+clear
 echo -e ""
-notif_clearlog
-echo -e " ${GREEN} Clear Log Berhasil ${NC}"
-echo ""
+echo -e "${CYAN}╔════════════════════════════════════════════╗${NC}"
+print_gradient "║      MASTONI GANTENG SYSTEM MAINTAINER       ║"
+echo -e "${CYAN}╚════════════════════════════════════════════╝${NC}"
+echo -e ""
+
+# 1. Jalankan Animasi Clear Log
+# Kita jalankan fungsi log di background, tapi karena sangat cepat,
+# kita gunakan animasi visual agar user merasa puas.
+run_clear_log &
+animated_loading "Cleaning Logs files " $!
+
+echo -e ""
+
+# 2. Jalankan Animasi Clear Cache
+# Simpan data RAM sebelum clear untuk laporan (opsional)
+ram_before=$(free -m | awk 'NR==2 {print $4}')
+
+run_clear_cache &
+animated_loading "Dropping RAM Cache  " $!
+
+ram_after=$(free -m | awk 'NR==2 {print $4}')
+
+# 3. Kirim Notifikasi
+echo -e ""
+echo -e " ${CYAN}Sending Notification to Telegram...${NC}"
+send_notif "$ram_before" "$ram_after"
+
+# 4. Finish
+echo -e ""
+echo -e "${CYAN}╔════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}║${GREEN}       MAINTENANCE COMPLETED SUCCESSFULLY   ${CYAN}║${NC}"
+echo -e "${CYAN}╚════════════════════════════════════════════╝${NC}"
+echo -e ""
+echo -e " Back to menu in 2 seconds..."
+sleep 2

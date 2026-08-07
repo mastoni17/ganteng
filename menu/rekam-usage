@@ -1,0 +1,81 @@
+#!/bin/bash
+# ========================================================
+#  MASTONI GANTENG: REALTIME BACKGROUND ACCOUNTING & TRACKER
+#  Metode: Delta I/O Kernel (Akurat untuk HAProxy/Websocket)
+# ========================================================
+
+USAGE_DB="/etc/ssh/usage_db"
+TMP_PID_DIR="/tmp/ssh_pid_usage"
+mkdir -p "$USAGE_DB"
+mkdir -p "$TMP_PID_DIR"
+
+# 1. Parsing auth.log untuk memetakan PID aktif ke Username masing-masing
+grep -h -E "Accepted|succeeded" /var/log/auth.log.1 /var/log/auth.log 2>/dev/null > /tmp/auth_accounting.log
+active_pids=$(ps ax -o pid,command 2>/dev/null | grep -E "dropbear|sshd" | grep -v "grep" | awk '{print $1}')
+
+# Buat list PID yang aktif saat ini untuk proses pembersihan nanti
+echo -n > /tmp/current_active_pids.txt
+
+for pid in $active_pids; do
+    log_entry=$(grep -F "[$pid]" /tmp/auth_accounting.log | tail -n 1)
+    
+    if [[ -n "$log_entry" ]]; then
+        user=$(echo "$log_entry" | awk '{for(i=1;i<=NF;i++) if($i=="for") {gsub(/['\'']/,"",$(i+1)); print $(i+1)}}')
+        
+        # Pastikan user merupakan user SSH premium (UID >= 1000)
+        if [[ -n "$user" ]]; then
+            is_premium=$(id -u "$user" 2>/dev/null)
+            if [[ -n "$is_premium" && "$is_premium" -ge 1000 ]]; then
+                echo "$pid" >> /tmp/current_active_pids.txt
+                
+                # Baca total bytes (read + write) langsung dari kernel proses tersebut
+                if [[ -r "/proc/$pid/io" ]]; then
+                    current_bytes=$(awk '/^read_bytes:/ {r=$2} /^write_bytes:/ {w=$2} END {print r+w}' "/proc/$pid/io" 2>/dev/null)
+                    
+                    if [[ -n "$current_bytes" && "$current_bytes" =~ ^[0-9]+$ ]]; then
+                        last_pid_file="$TMP_PID_DIR/${pid}.last"
+                        last_bytes=0
+                        [[ -f "$last_file" ]] && last_bytes=$(cat "$last_pid_file" 2>/dev/null)
+                        if ! [[ "$last_bytes" =~ ^[0-9]+$ ]]; then last_bytes=0; fi
+                        
+                        # Hitung delta (selisih pemakaian dalam 1 menit terakhir)
+                        if (( current_bytes >= last_bytes )); then
+                            delta=$((current_bytes - last_bytes))
+                        else
+                            # Jika mengecil (jarang terjadi kecuali proses reset internal), ambil data utuh
+                            delta=$current_bytes
+                        fi
+                        
+                        # Masukkan delta pemakaian ke database permanen user
+                        db_file="$USAGE_DB/${user}.total"
+                        total_tabungan=0
+                        [[ -f "$db_file" ]] && total_tabungan=$(cat "$db_file" 2>/dev/null)
+                        if ! [[ "$total_tabungan" =~ ^[0-9]+$ ]]; then total_tabungan=0; fi
+                        
+                        total_tabungan=$((total_tabungan + delta))
+                        echo "$total_tabungan" > "$db_file"
+                        
+                        # Update status pembacaan terakhir untuk PID ini
+                        echo "$current_bytes" > "$last_pid_file"
+                    fi
+                fi
+            fi
+        fi
+    fi
+done
+
+# 2. PEMBERSIHAN SAMPAH LOG (Mencegah kebocoran memori di folder /tmp)
+# Jika ada PID yang sudah tidak aktif (user diskonek), hapus file temporary-nya
+if [[ -d "$TMP_PID_DIR" ]]; then
+    for f in "$TMP_PID_DIR"/*.last; do
+        [[ -e "$f" ]] || break
+        filename=$(basename "$f")
+        pid_check="${filename%.last}"
+        if ! grep -q -w "$pid_check" /tmp/current_active_pids.txt; then
+            rm -f "$f"
+        fi
+    done
+fi
+
+rm -f /tmp/auth_accounting.log
+rm -f /tmp/current_active_pids.txt

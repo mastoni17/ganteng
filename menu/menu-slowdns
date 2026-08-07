@@ -1,0 +1,52 @@
+#!/bin/bash
+# --- WARNA & TEMA ---
+ungu="\033[0;35m"
+BlueCyan="\033[5;36m"
+Xark="\033[0m"
+WhiteBe="\033[5;37m"
+ORANGE='\033[0;33m'
+
+function baris_panjang() {
+  echo -e "${BlueCyan} ——————————————————————————————————— ${Xark} "
+}
+
+function xdxl_Banner() {
+    clear
+    baris_panjang
+    echo -e "${ungu}         MENU SLOWDNS MANAGER    ${Xark} "
+    baris_panjang
+}
+
+# --- LOGIC MENU ---
+xdxl_Banner
+echo -e ""
+echo -e "  ${ORANGE}1.${Xark} ${WhiteBe} Create User SlowDNS ${Xark}"
+echo -e "  ${ORANGE}2.${Xark} ${WhiteBe} Delete User SlowDNS ${Xark}"
+echo -e "  ${ORANGE}3.${Xark} ${WhiteBe} List Member SlowDNS ${Xark}"
+echo -e "  ${ORANGE}4.${Xark} ${WhiteBe} Renew User SlowDNS ${Xark}"
+echo -e ""
+echo -e "  ${ORANGE}x.${Xark} ${WhiteBe} Back to Main Menu ${Xark}"
+echo -e ""
+baris_panjang
+read -p " Select From Options [1-4 or x] :  " menu
+
+case $menu in
+1)
+  add-slowdns
+  ;;
+2)
+  del-slowdns
+  ;;
+3)
+  cek-slowdns
+  ;;
+4)
+  renew-slowdns
+  ;;
+x)
+  menu
+  ;;
+*)
+  menu-slowdns
+  ;;
+esac

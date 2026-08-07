@@ -1,7 +1,7 @@
 #!/bin/bash
 clear
 
-# --- WARNA ---
+# --- WARNA & VARIABEL ---
 yellow="\033[0;33m"
 ungu="\033[0;35m"
 Red="\033[91;1m"
@@ -11,6 +11,7 @@ WhiteBe="\033[5;37m"
 GreenBe="\033[5;32m"
 YellowBe="\033[5;33m"
 BlueBe="\033[5;34m"
+BlinkRed="\033[5;31m"
 
 # Ambil nama admin
 if [[ -e /etc/xray/username ]]; then
@@ -19,38 +20,43 @@ else
     nama="MASTONI GANTENG"
 fi
 
+# --- FUNGSI NAVIGASI KEMBALI ---
+function back_to_menu() {
+    echo ""
+    if command -v m-vless &> /dev/null; then
+        m-vless
+    else
+        exit 0
+    fi
+}
+
 # --- FUNGSI GARIS ---
 function baris_panjang() {
-  echo -e "${BlueCyan} ——————————————————————————————————— ${Xark} "
+  echo -e "${BlueCyan} —————————————————————————————————————————————————— ${Xark} "
 }
 
 # --- BANNER ---
 function xdxl_Banner() {
     clear
     baris_panjang
-    echo -e "${ungu}           $nama       ${Xark} "
+    echo -e "${ungu}                $nama                ${Xark} "
     baris_panjang
 }
 
 function Sc_Credit(){
     sleep 1
     baris_panjang
-    echo -e "${ungu}  Terimakasih Telah Menggunakan ${Xark}"
-    echo -e "${ungu}           Script Credit ${Xark}"
-    echo -e "${ungu}           $nama ${Xark}"
+    echo -e "${ungu}      Terimakasih Telah Menggunakan ${Xark}"
+    echo -e "${ungu}                Script Credit ${Xark}"
+    echo -e "${ungu}                $nama ${Xark}"
     baris_panjang
     echo ""
     read -rp "press any key for back"
-    # Cek jika perintah menu ada, jika tidak exit
-    if command -v menu &> /dev/null; then
-        menu
-    else
-        exit 0
-    fi
+    back_to_menu
 }
 
 # --- ANIMASI LOADING ---
-duration=3
+duration=2
 frames=("██10%" "█████35%" "█████████65%" "█████████████80%" "█████████████████████90%" "█████████████████████████100%")
 num_frames=${#frames[@]}
 num_iterations=$((duration))
@@ -64,95 +70,152 @@ Loading_Animasi() {
         echo ""
         echo ""
         echo -e "\e[1;${color_code}m ${frames[$index]}\e[0m"
-        sleep 0.5
+        sleep 0.2
     done
 }
 
 function Loading_Succes() {
     clear
     echo -e  "\033[5;32mSucces\033[0m"
-    sleep 2
+    sleep 1
     clear
 }
 
-# --- LIST MEMBER VLESS (FIX TANDA #&) ---
+# --- LIST MEMBER VLESS (DENGAN DETAIL SISA HARI & STATUS) ---
 function Daftar_Member_Vless() {
     baris_panjang
-    echo ""
-    # Cek file config ada atau tidak
+    echo -e "${BlueCyan}                LIST USER VLESS                   ${Xark}"
+    echo -e " -------------------------------------------------- "
+    printf "  %-4s %-12s %-12s %-10s %-8s\n" "NO" "USERNAME" "EXP" "SISA" "STATUS"
+    echo -e " -------------------------------------------------- "
+    
+    # 1. Cek File Config
     if [[ ! -f "/etc/xray/config.json" ]]; then
         echo -e "${Red} File /etc/xray/config.json tidak ditemukan!${Xark}"
-        return
+        echo ""
+        read -n 1 -s -r -p "Press any key to back..."
+        back_to_menu
+        exit 0
     fi
 
-    # PERBAIKAN UTAMA: Menggunakan #& untuk VLESS sesuai VPS Anda
-    if grep -q "^#& " "/etc/xray/config.json"; then
-        grep -E "^#& " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | column -t | sort | uniq | lolcat
+    # 2. Ambil data user unik ke dalam Array
+    mapfile -t member_lines < <(grep -E "^#& " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | sort | uniq)
+
+    if [ ${#member_lines[@]} -eq 0 ]; then
+        echo -e "          ${BlinkRed}DATA USER VLESS KOSONG!${Xark}"
     else
-        echo -e "${Red} Tidak ada user VLESS (tanda #&) ditemukan.${Xark}"
+        for i in "${!member_lines[@]}"; do
+            u=$(echo "${member_lines[$i]}" | awk '{print $1}')
+            e=$(echo "${member_lines[$i]}" | awk '{print $2}')
+
+            # Hitung Sisa Hari
+            exp_s=$(date -d "$e" +%s 2>/dev/null)
+            now_s=$(date -d "$(date +%Y-%m-%d)" +%s)
+            
+            if [[ -n "$exp_s" ]]; then
+                sisa_detik=$((exp_s - now_s))
+                sisa_hari=$((sisa_detik / 86400))
+                
+                if [ "$sisa_hari" -lt "0" ]; then
+                    tampil_sisa="${Red}Expired${Xark}"
+                    status="${Red}OFF${Xark}"
+                elif [ "$sisa_hari" -eq "0" ]; then
+                    tampil_sisa="${YellowBe}0 Hari${Xark}"
+                    status="${GreenBe}ON${Xark}"
+                else
+                    tampil_sisa="${GreenBe}${sisa_hari} Hari${Xark}"
+                    status="${GreenBe}ON${Xark}"
+                fi
+            else
+                tampil_sisa="???"
+                status="???"
+            fi
+
+            # Print baris tabel dengan Nomor Urut
+            printf "  [%02d] %-12s %-12s %-19b %-17b\n" "$((i+1))" "$u" "$e" "$tampil_sisa" "$status"
+        done
     fi
-    echo ""
+    echo -e " -------------------------------------------------- "
     baris_panjang
     echo ""
 }
 
 # --- CEK CONFIG & GENERATE LINK ---
 function Cek_Config_Vless() {
-    read -rp "Input Username : " user
-    if [ -z "$user" ]; then
-        echo -e "User Tidak Ditemukan!!!"
-        read -n 1 -s -r -p "Enter Back To Menu"
-        if command -v menu &> /dev/null; then menu; else exit 0; fi
-    else
-        # Cek apakah user ada di config VLESS (Cari #&)
-        if ! grep -q "^#& $user" "/etc/xray/config.json"; then
-             echo -e "${Red}User '$user' tidak ditemukan di daftar VLESS!${Xark}"
-             read -n 1 -s -r -p "Enter Back To Menu"
-             if command -v menu &> /dev/null; then menu; else exit 0; fi
-             exit 0
-        fi
+    echo -ne " ${yellow}➤ Input Nomor/Username (Enter = Kembali) : ${Xark}"
+    read -r input_user
 
-        # Ambil Data
-        CITY=$(cat /etc/xray/city 2>/dev/null)
-        ISP=$(cat /etc/xray/isp 2>/dev/null)
-        domain=$(cat /etc/xray/domain 2>/dev/null)
-
-        # Path Limit & Quota VLESS
-        if [[ -e /etc/kyt/limit/vless/ip/$user ]]; then
-            iplimit=$(cat /etc/kyt/limit/vless/ip/$user)
-        else
-            iplimit="Unlimited"
-        fi
-
-        if [[ -e /etc/vless/$user ]]; then
-            Quota1=$(cat /etc/vless/$user)
-            Quota=$((Quota1 / 1024 / 1024 / 1024))
-        else
-            Quota="Unlimited"
-        fi
-
-        # Ambil UUID
-        # Logic: Cari baris user (#& user), lalu ambil ID di blok json nya
-        uuid=$(cat /etc/xray/config.json | grep -w "$user" -A 1 | grep "id" | cut -d '"' -f 4 | head -1)
-
-        # Fallback jika uuid kosong
-        if [[ -z "$uuid" ]]; then
-            uuid=$(grep -E "^},{" "/etc/xray/config.json" | grep -i '"'"${user}"'"' | cut -d " " -f 2 | cut -d '"' -f 2 | uniq)
-        fi
-
-        # Ambil Expired (Cari #&)
-        exp=$(grep -E "^#& " "/etc/xray/config.json" | grep -w "$user" | cut -d ' ' -f 3 | uniq)
-
-        # --- GENERATE LINK VLESS (Standard) ---
-        # VLESS WS TLS
-        vlesslink1="vless://${uuid}@${domain}:443?path=/vless&security=tls&encryption=none&host=${domain}&type=ws&sni=${domain}#${user}"
-
-        # VLESS WS NON TLS
-        vlesslink2="vless://${uuid}@${domain}:80?path=/vless&security=none&encryption=none&host=${domain}&type=ws#${user}"
-
-        # VLESS GRPC
-        vlesslink3="vless://${uuid}@${domain}:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=vless-grpc&sni=${domain}#${user}"
+    # Kembali ke menu jika input kosong
+    if [[ -z "$input_user" ]]; then
+        back_to_menu
+        exit 0
     fi
+
+    # Array untuk deteksi nomor urut
+    mapfile -t user_only < <(grep -E "^#& " "/etc/xray/config.json" | cut -d ' ' -f 2 | sort | uniq)
+
+    # Deteksi Input (Angka atau Teks)
+    if [[ "$input_user" =~ ^[0-9]+$ ]]; then
+        idx=$((input_user - 1))
+        if [[ $idx -ge 0 && $idx -lt ${#user_only[@]} ]]; then
+            user="${user_only[$idx]}"
+        else
+            user=""
+        fi
+    else
+        user="$input_user"
+    fi
+
+    # Validasi User
+    if [ -z "$user" ] || ! grep -q "^#& $user" "/etc/xray/config.json"; then
+         echo ""
+         echo -e " ${BlinkRed}User tidak ditemukan!${Xark}"
+         echo ""
+         baris_panjang
+         read -n 1 -s -r -p "Press any key to try again..."
+         $0
+         exit 0
+    fi
+
+    CITY=$(cat /etc/xray/city 2>/dev/null)
+    ISP=$(cat /etc/xray/isp 2>/dev/null)
+    domain=$(cat /etc/xray/domain 2>/dev/null)
+
+    if [[ -e /etc/kyt/limit/vless/ip/$user ]]; then
+        iplimit=$(cat /etc/kyt/limit/vless/ip/$user)
+    else
+        iplimit="Unlimited"
+    fi
+
+    if [[ -e /etc/vless/$user ]]; then
+        Quota1=$(cat /etc/vless/$user)
+        Quota=$((Quota1 / 1024 / 1024 / 1024))
+    else
+        Quota="Unlimited"
+    fi
+
+    # Ekstraksi presisi tinggi untuk UUID VLESS
+    uuid=$(grep -E "^},{" "/etc/xray/config.json" | grep '"'"${user}"'"' | awk -F '"' '{print $4}' | head -1)
+    exp=$(grep -E "^#& " "/etc/xray/config.json" | grep -w "$user" | cut -d ' ' -f 3 | uniq)
+
+    # Perhitungan ulang sisa hari untuk menu detail
+    exp_s=$(date -d "$exp" +%s 2>/dev/null)
+    now_s=$(date -d "$(date +%Y-%m-%d)" +%s)
+    sisa_hari=$(( (exp_s - now_s) / 86400 ))
+    
+    if [ "$sisa_hari" -lt "0" ]; then
+        status_exp="${Red}Expired${Xark}"
+    elif [ "$sisa_hari" -eq "0" ]; then
+        status_exp="${YellowBe}Berakhir Hari Ini${Xark}"
+    else
+        status_exp="${GreenBe}$sisa_hari Hari Lagi${Xark}"
+    fi
+
+    # GENERATE LINK TERMASUK HTTPUPGRADE
+    vlesslink1="vless://${uuid}@${domain}:443?path=/vless&security=tls&encryption=none&host=${domain}&type=ws&sni=${domain}#${user}"
+    vlesslink2="vless://${uuid}@${domain}:80?path=/vless&security=none&encryption=none&host=${domain}&type=ws#${user}"
+    vlesslink3="vless://${uuid}@${domain}:443?mode=gun&security=tls&encryption=none&type=grpc&serviceName=vless-grpc&sni=${domain}#${user}"
+    vlesslink4="vless://${uuid}@${domain}:443?path=/vless-up&security=tls&encryption=none&host=${domain}&type=httpupgrade&sni=${domain}#${user}"
 }
 
 function Details_Account() {
@@ -169,8 +232,9 @@ function Details_Account() {
     echo -e " Location       : $CITY"
     echo -e " ISP            : $ISP"
     echo -e " Security       : auto"
-    echo -e " Network        : ws/grpc"
-    echo -e " Path           : /vless"
+    echo -e " Network        : ws, grpc, httpupgrade"
+    echo -e " Path WS        : /vless"
+    echo -e " Path UPG       : /vless-up"
     echo -e " ServiceName    : vless-grpc"
     echo -e "\033[0m"
 }
@@ -183,20 +247,23 @@ function Link_Json() {
     baris_panjang
     echo -e " Link GRPC      : ${vlesslink3}"
     baris_panjang
+    echo -e " Link UPGRADE   : ${vlesslink4}"
+    baris_panjang
     echo -e " OpenClash      : https://${domain}:81/vless-$user.txt"
     baris_panjang
 }
 
 function Details_Expiry() {
-    echo -e "\033[33m Expiry         : $exp \033[0m"
+    echo -e " Expired Date   : ${yellow}$exp${Xark}"
+    echo -e " Sisa Aktif     : $status_exp"
     baris_panjang
 }
 
 # --- EKSEKUSI UTAMA ---
 xdxl_Banner
-echo "     "
+echo ""
 Daftar_Member_Vless
-echo "     "
+echo ""
 Cek_Config_Vless
 clear
 Loading_Animasi

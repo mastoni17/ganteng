@@ -1,0 +1,48 @@
+#!/bin/bash
+# --- WARNA ---
+ungu="\033[0;35m"
+BlueCyan="\033[5;36m"
+Xark="\033[0m"
+Red="\033[91;1m"
+WhiteBe="\033[5;37m"
+GreenBe="\033[5;32m"
+
+function baris_panjang() {
+  echo -e "${BlueCyan} ——————————————————————————————————— ${Xark} "
+}
+
+clear
+baris_panjang
+echo -e "${ungu}        DELETE USER SLOWDNS      ${Xark} "
+baris_panjang
+echo -e ""
+echo -e "${WhiteBe} List User Available: ${Xark}"
+echo -e ""
+grep -E "^### " "/etc/passwd" 2>/dev/null | cut -d ' ' -f 2-3 | sort | uniq
+echo -e ""
+baris_panjang
+read -p " Input Username to Delete : " User
+
+if [ -z "$User" ]; then
+    echo -e "${Red} Username tidak boleh kosong! ${Xark}"
+    sleep 2
+    menu-slowdns
+    exit 0
+fi
+
+# Cek Keberadaan User
+if getent passwd $User > /dev/null 2>&1; then
+    userdel -f $User
+    echo -e ""
+    echo -e " ${GreenBe}User $User Berhasil Dihapus.${Xark}"
+    echo -e ""
+    baris_panjang
+else
+    echo -e ""
+    echo -e " ${Red}User $User Tidak Ditemukan.${Xark}"
+    echo -e ""
+    baris_panjang
+fi
+
+read -n 1 -s -r -p "Press any key to back..."
+menu-slowdns

@@ -1,63 +1,180 @@
 #!/bin/bash
-# Color
-RED='\033[0;31m'
-NC='\033[0m'
-GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-clear
+R='\033[0m'            
+P='\033[1;37m'         
+M='\033[1;31m'          
+H='\033[1;32m'         
+K='\033[1;33m'         
+C='\033[1;36m'          
+Kedip='\033[5m'       
 
-NUMBER_OF_CLIENTS=$(grep -c -E "^#!# " "/etc/xray/config.json")
-	if [[ ${NUMBER_OF_CLIENTS} == '0' ]]; then
-		clear
-        echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-        echo -e "          Renew Shadowsocks       \E[0m"
-        echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-		echo ""
-		echo "You have no existing clients!"
-		echo ""
-		echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-        echo ""
-        read -n 1 -s -r -p "Press any key to back on menu"
-        menu
-	fi
+BG_M='\033[41m\033[1;37m' 
+BG_G='\033[42m\033[1;37m' 
+BG_K='\033[43m\033[1;30m'
 
-	clear
-	echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo -e "         Renew Shadowsocks         \E[0m"
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo ""
-  	grep -E "^#!# " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | column -t | sort | uniq
-    echo ""
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-	read -rp "Input Username : " user
-    if [ -z $user ]; then
-    menu
-    else
-    read -p "Expired (days): " masaaktif
-    exp=$(grep -wE "^#!# $user" "/etc/xray/config.json" | cut -d ' ' -f 3 | sort | uniq)
-    now=$(date +%Y-%m-%d)
-    d1=$(date -d "$exp" +%s)
-    d2=$(date -d "$now" +%s)
-    exp2=$(( (d1 - d2) / 86400 ))
-    exp3=$(($exp2 + $masaaktif))
-    exp4=`date -d "$exp3 days" +"%Y-%m-%d"`
-    sed -i "/#!# $user/c\#!# $user $exp4" /etc/xray/config.json
-    sed -i "/#!# $user/c\#!# $user $exp4" /root/akun/shadowsocks/.shadowsocks.conf
-    systemctl restart xray > /dev/null 2>&1
+ki="${C}│${R}"
+ka="${C}│${R}"
+Garis="${C}───────────────────────────────────────────────────────${R}"
+Atas="${C}┌$Garis┐${R}"
+Tengah="${C}├$Garis┤${R}"
+Bawah="${C}└$Garis┘${R}"
+
+# --- SYSTEM CHECK ---
+GREP_PATTERN="^###"
+CONFIG_FILE="/etc/xray/config.json"
+
+while true; do
     clear
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo " Shadowsocks Account Was Successfully Renewed"
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo ""
-    echo " Client Name : $user"
-    echo " Expired On  : $exp4"
-    echo ""
-    echo -e "\033[0;33m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-    echo ""
-    read -n 1 -s -r -p "Press any key to back on menu"
-    menu
+    echo -e ""
+    echo -e "           ${Kedip}${K}🔄  RENEW VMESS ACCOUNT 🔄${R}"
+    echo -e ""
+
+    mapfile -t user_list < <(grep -E "$GREP_PATTERN " "$CONFIG_FILE" | cut -d ' ' -f 2 | sort | uniq)
+    total_client=${#user_list[@]}
+
+    # --- CEK JIKA KOSONG ---
+    if [[ ${total_client} == '0' ]]; then
+        echo -e "$Atas"
+        echo -e "$ki${BG_M}                    NO CLIENT DATA                     ${R}$ka"
+        echo -e "$Tengah"
+        printf "$ki ${M}%-53s${R}$ka\n" "You have no existing clients!"
+        echo -e "$Bawah"
+        echo ""
+        read -n 1 -s -r -p " Press any key to back on menu"
+        m-vmess
+        break
     fi
+
+    echo -e "$Atas"
+    echo -e "$ki${BG_K}                    LIST VMESS USER                    ${R}$ka"
+    echo -e "$Tengah"
+    printf "$ki ${P}%-4s %-20s %-12s %-15s${R}$ka\n" "NO" "USER" "EXPIRED" "STATUS"
+    echo -e "$Tengah"
+    no=1
+    now_sec=$(date +%s)
+
+    for user in "${user_list[@]}"; do
+        # PERBAIKAN: Gunakan head -n 1 agar variabel tidak error saat dibaca command date
+        exp=$(grep -wE "$GREP_PATTERN $user" "$CONFIG_FILE" | awk '{print $3}' | sort | uniq | head -n 1)
+        exp_sec=$(date -d "$exp" +%s 2>/dev/null)
+        
+        # Validasi jika format tanggal rusak
+        if [[ -z "$exp_sec" ]]; then
+            exp="Unknown"
+            sts_color="${M}"
+            sts_text="Error"
+        else
+            diff=$(( (exp_sec - now_sec) / 86400 ))
+            if [[ $diff -ge 1 ]]; then
+                sts_color="${Kedip}${H}"
+                sts_text="${diff} Days"
+            elif [[ $diff -eq 0 ]]; then
+                sts_color="${K}"
+                sts_text="Today"
+            else
+                sts_color="${M}"
+                sts_text="Expired"
+            fi
+        fi
+        
+        printf "$ki ${C}%-4s ${P}%-20s ${K}%-12s ${sts_color}%-15s${R}$ka\n" "$no)" "$user" "$exp" "$sts_text"
+        ((no++))
+    done
+    
+    echo -e "$Tengah"
+    printf "$ki  ${M}%-53s${R}$ka\n" "0)  BACK TO MAIN MENU"
+    echo -e "$Bawah"
+    echo -e ""
+    echo -e " ${P}Select user to renew (Number/Name)${R}"
+    echo -e " ${C}───────────────────────────────────────────────────────${R}"
+
+    echo -ne " ${C}➤ Select User : ${P}"
+    read selection
+    if [ -z "$selection" ]; then continue; fi
+    if [[ "$selection" == "0" ]]; then m-vmess; break; fi
+
+    if [[ $selection =~ ^[0-9]+$ ]]; then
+        if [[ $selection -ge 1 && $selection -le $total_client ]]; then
+            user="${user_list[$((selection-1))]}"
+        else
+            echo -e " ${M}[!] Error: Number out of range!${R}"; sleep 1; continue
+        fi
+    else
+        user="$selection"
+        if ! grep -qws "$GREP_PATTERN $user" "$CONFIG_FILE"; then
+            echo -e " ${M}[!] Error: Username not found!${R}"; sleep 1; continue
+        fi
+    fi
+    echo -e ""
+    echo -e " ${P}Input New Configuration for: ${H}$user${R}"
+    
+    echo -ne " ${C}➤ Renew Duration (Days) : ${P}"
+    read masaaktif
+    if [[ ! $masaaktif =~ ^[0-9]+$ ]]; then
+        echo -e " ${M}[!] Error: Input must be a number!${R}"; sleep 1; continue
+    fi
+
+    echo -ne " ${C}➤ Limit Quota (GB)      : ${P}"
+    read Quota
+    if [ -z ${Quota} ]; then Quota="0"; fi
+
+    echo -ne " ${C}➤ Limit IP Address      : ${P}"
+    read iplim
+    if [ -z ${iplim} ]; then iplim="0"; fi
+
+    # --- PROSES PEMBARUAN TANGGAL EXPIRED ---
+    exp_old=$(grep -wE "^### $user" "$CONFIG_FILE" | awk '{print $3}' | sort | uniq | head -n 1)
+    now=$(date +%Y-%m-%d)
+    d1=$(date -d "$exp_old" +%s)
+    d2=$(date -d "$now" +%s)
+
+    # Logika Cerdas: Jika masih ada sisa aktif, sisa + tambahan hari. Jika expired, hari ini + tambahan hari.
+    if [[ $d1 -ge $d2 ]]; then
+        exp_new=$(date -d "$exp_old + $masaaktif days" +"%Y-%m-%d")
+    else
+        exp_new=$(date -d "$now + $masaaktif days" +"%Y-%m-%d")
+    fi
+
+    # PERBAIKAN: Gunakan fitur "search and replace" (s/old/new) agar tidak menghapus UUID
+    sed -i "/^### $user /s/$exp_old/$exp_new/g" "$CONFIG_FILE"
+    
+    if [ -f /etc/vmess/.vmess.db ]; then
+        sed -i "/^### $user /s/$exp_old/$exp_new/g" /etc/vmess/.vmess.db
+    fi
+
+    # --- PROSES UPDATE LIMIT & QUOTA ---
+    rm -f /etc/kyt/limit/vmess/ip/${user}
+    rm -f /etc/vmess/$user
+
+    mkdir -p /etc/kyt/limit/vmess/ip
+    echo ${iplim} >> /etc/kyt/limit/vmess/ip/${user}
+
+    if [ ! -e /etc/vmess/ ]; then mkdir -p /etc/vmess/; fi
+    c=$(echo "${Quota}" | sed 's/[^0-9]*//g')
+    d=$((${c} * 1024 * 1024 * 1024))
+    if [[ ${c} != "0" ]]; then
+        echo "${d}" >/etc/vmess/${user}
+    fi
+    
+    # Restart Service
+    systemctl restart xray > /dev/null 2>&1
+
+    clear
+    echo -e ""
+    echo -e "         ${Kedip}${H}✅ ACCOUNT RENEWED SUCCESSFULLY ✅${R}"
+    echo -e ""
+    echo -e "$Atas"
+    echo -e "$ki${BG_G}                    RENEWAL DETAILS                    ${R}$ka"
+    echo -e "$Tengah"
+    printf "$ki ${P}%-20s ${C}: ${K}%-30s${R}$ka\n" "Client Name" "$user"
+    printf "$ki ${P}%-20s ${C}: ${M}%-30s${R}$ka\n" "Expires Old" "$exp_old"
+    printf "$ki ${P}%-20s ${C}: ${H}%-30s${R}$ka\n" "Expires New" "$exp_new"
+    printf "$ki ${P}%-20s ${C}: ${P}%-30s${R}$ka\n" "Added Days" "+$masaaktif Days"
+    echo -e "$Tengah"
+    printf "$ki ${P}%-20s ${C}: ${P}%-30s${R}$ka\n" "New Quota" "$Quota GB"
+    printf "$ki ${P}%-20s ${C}: ${P}%-30s${R}$ka\n" "New Limit IP" "$iplim Device"
+    echo -e "$Bawah"
+    echo -e ""
+    
+    echo -e "${C} Account renewed. Returning to list...${R}"
+    read -n 1 -s -r -p " Press any key to continue"
+done

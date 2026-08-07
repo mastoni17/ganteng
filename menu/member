@@ -1,40 +1,242 @@
 #!/bin/bash
-# MASTONI
-# ==========================================
-# Color
-RED='\033[0;31m'
+# ======================================================
+#   MASTONI GANTENG MONITOR: v30 (Dual View Auto-Fallback)
+# ======================================================
+
+# --- KONFIGURASI WARNA & BACKGROUND ---
 NC='\033[0m'
-GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-# ==========================================
-# Getting
-MYIP=$(wget -qO- ipinfo.io/ip);
+BOLD='\033[1m'
+WHITE='\033[1;37m'
+YELLOW='\033[33m'; GREEN='\033[32m'; RED='\033[31m'; PURPLE='\033[35m'; BLUE='\033[36m'
+
+COLOR_BORDER='\033[38;5;93m'
+BG_MAIN='\033[48;5;88m'
+
+DB_FILE="/etc/ssh/.ssh.db"
+
+# Info Server (Cache di awal)
+domain=$(cat /etc/xray/domain 2>/dev/null || echo "IP-Only")
+IP=$(curl -sS ipv4.icanhazip.com 2>/dev/null)
+UDP_ZIVPN=$(grep -o '"listen": *"[^"]*"' /etc/zivpn/config.json 2>/dev/null | cut -d'"' -f4 | sed 's/://g' | sed 's/0.0.0.0//g' || echo "5667")
+PUB=$(cat /etc/slowdns/server.pub 2>/dev/null || echo "Not Set")
+NS=$(cat /etc/xray/dns 2>/dev/null || echo "Not Set")
+ISP=$(cat /root/.info/.isp 2>/dev/null || echo "Unknown")
+CITY=$(cat /root/.info/.city 2>/dev/null || echo "Unknown")
+
 clear
-echo -e "\033[1;93m┌──────────────────────────────────────────┐\033[0m"
-echo "   USERNAME       EXP DATE         STATUS"
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
-echo -e "\033[1;93m┌──────────────────────────────────────────┐\033[0m"
-while read expired
-do
-AKUN="$(echo $expired | cut -d: -f1)"
-ID="$(echo $expired | grep -v nobody | cut -d: -f3)"
-exp="$(chage -l $AKUN | grep "Account expires" | awk -F": " '{print $2}')"
-status="$(passwd -S $AKUN | awk '{print $2}' )"
-if [[ $ID -ge 1000 ]]; then
-if [[ "$status" = "L" ]]; then
- printf "%-17s %2s %-17s %2s \n" "  $AKUN" "$exp   " "LOCKED${NORMAL}"
-else
- printf "%-17s %2s %-17s %2s \n" "  $AKUN" "$exp   " "UNLOCKED${NORMAL}"
-fi
-fi
-done < /etc/passwd
-JUMLAH="$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)"
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
-echo -e "\033[1;93m┌──────────────────────────────────────────┐\033[0m"
-echo "   Account number: $JUMLAH   user"
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
-echo -e ""
+
+# FUNGSI CEK STATUS ONLINE KILAT
+get_status() {
+    local usr=$1
+    if grep -F "[$pid]" /tmp/auth_success_db.log 2>/dev/null | grep -q -w "$usr"; then
+        echo -e "${GREEN}ON${NC}"
+    elif pgrep -u "$usr" sshd > /dev/null 2>&1 || pgrep -u "$usr" dropbear > /dev/null 2>&1; then
+         echo -e "${GREEN}ON${NC}"
+    else
+        echo -e "${RED}OFF${NC}"
+    fi
+}
+
+# --- FUNGSI TAMPILKAN DAFTAR USER (DUAL TABLE) ---
+function show_user_list() {
+    # 1. Siapkan cache proses untuk mempercepat pengecekan
+    active_pids=$(ps ax -o pid,command 2>/dev/null | grep -E "dropbear|sshd" | awk '{print $1}')
+    grep -h -E "Accepted|succeeded" /var/log/auth.log.1 /var/log/auth.log 2>/dev/null > /tmp/auth_success_db.log
+
+    echo -e "${COLOR_BORDER}╭──────────────────────────────────────────────────────╮${NC}"
+    printf "${COLOR_BORDER}│${BG_MAIN}${BOLD}${WHITE}%-54s${NC}${COLOR_BORDER}│${NC}\n" "       MASTONI GANTENG: USER MANAGER (DUAL VIEW)        "
+    echo -e "${COLOR_BORDER}╰──────────────────────────────────────────────────────╯${NC}"
+
+    user_list=() # Array global untuk nyimpan nama
+    i=0
+
+    # ==========================================
+    # TABEL 1: SYSTEM USERS (/etc/passwd)
+    # ==========================================
+    echo -e "\n${YELLOW} [1] TABEL: LINUX SYSTEM USER (UID >= 1000)${NC}"
+    echo -e "${COLOR_BORDER}╭────┬──────────────────────┬─────────────┬────────────╮${NC}"
+    echo -e "${COLOR_BORDER}│ NO │ USERNAME             │ EXPIRED     │ STATUS     │${NC}"
+    echo -e "${COLOR_BORDER}├────┼──────────────────────┼─────────────┼────────────┤${NC}"
+
+    while IFS=: read -r username _ uid _ _ _ shell; do
+        if [[ "$uid" -ge 1000 && "$username" != "nobody" ]]; then
+            user_list+=("$username")
+            i=$((i+1))
+            
+            exp_str=$(chage -l "$username" 2>/dev/null | grep "Account expires" | cut -d: -f2)
+            if [[ "$exp_str" == *"never"* ]]; then 
+                sisa="Unlimited"
+            else
+                exp_date=$(date -d "$exp_str" +%s 2>/dev/null)
+                today=$(date +%s)
+                if [[ -n "$exp_date" ]]; then
+                    diff=$(( (exp_date - today) / 86400 ))
+                    if [[ $diff -lt 0 ]]; then sisa="${RED}Expired${NC}"; else sisa="${GREEN}${diff} Hari${NC}"; fi
+                else
+                    sisa="${YELLOW}Unknown${NC}"
+                fi
+            fi
+            
+            status=$(get_status "$username")
+            printf "${COLOR_BORDER}│ %-2s │ %-20s │ %-19b │ %-18b │${NC}\n" "$i" "${username:0:20}" "$sisa" "$status"
+        fi
+    done < /etc/passwd
+    echo -e "${COLOR_BORDER}╰────┴──────────────────────┴─────────────┴────────────╯${NC}"
+
+    # ==========================================
+    # TABEL 2: DATABASE USERS (.ssh.db)
+    # ==========================================
+    echo -e "\n${YELLOW} [2] TABEL: SSH DATABASE (/etc/ssh/.ssh.db)${NC}"
+    echo -e "${COLOR_BORDER}╭────┬──────────────────────┬─────────────┬────────────╮${NC}"
+    echo -e "${COLOR_BORDER}│ NO │ USERNAME             │ EXPIRED     │ STATUS     │${NC}"
+    echo -e "${COLOR_BORDER}├────┼──────────────────────┼─────────────┼────────────┤${NC}"
+
+    if [ -f "$DB_FILE" ]; then
+        while read -r tag username pass quota limit exp1 exp2 exp3; do
+            if [[ "$tag" == "#ssh#" ]]; then
+                # Hanya masukkan ke list jika belum ada di tabel 1 untuk menghindari duplikasi nomor index
+                if [[ ! " ${user_list[@]} " =~ " ${username} " ]]; then
+                    user_list+=("$username")
+                    i=$((i+1))
+                fi
+                
+                exp_str=$(chage -l "$username" 2>/dev/null | grep "Account expires" | cut -d: -f2)
+                
+                if [[ -z "$exp_str" ]]; then
+                    db_exp_date="$exp1 $exp2 $exp3"
+                    exp_sec=$(date -d "$db_exp_date" +%s 2>/dev/null)
+                    today=$(date +%s)
+                    
+                    if [[ -n "$exp_sec" ]]; then
+                        diff=$(( (exp_sec - today) / 86400 ))
+                        if [[ $diff -lt 0 ]]; then 
+                            sisa="${RED}Expired${NC}"
+                        else 
+                            sisa="${GREEN}${diff} Hari${NC}"
+                        fi
+                    else
+                        sisa="${YELLOW}Unknown${NC}"
+                    fi
+                    status="${RED}OFF${NC}" 
+                    
+                elif [[ "$exp_str" == *"never"* ]]; then 
+                    sisa="Unlimited"
+                    status=$(get_status "$username")
+                else
+                    exp_date=$(date -d "$exp_str" +%s 2>/dev/null)
+                    today=$(date +%s)
+                    if [[ -n "$exp_date" ]]; then
+                        diff=$(( (exp_date - today) / 86400 ))
+                        if [[ $diff -lt 0 ]]; then sisa="${RED}Expired${NC}"; else sisa="${GREEN}${diff} Hari${NC}"; fi
+                    else
+                        sisa="${YELLOW}Unknown${NC}"
+                    fi
+                    status=$(get_status "$username")
+                fi
+                
+                printf "${COLOR_BORDER}│ %-2s │ %-20s │ %-19b │ %-18b │${NC}\n" "$i" "${username:0:20}" "$sisa" "$status"
+            fi
+        done < "$DB_FILE"
+    else
+         echo -e "${COLOR_BORDER}│${NC} ${RED}Database tidak ditemukan!${NC}                            ${COLOR_BORDER}│${NC}"
+    fi
+    echo -e "${COLOR_BORDER}╰────┴──────────────────────┴─────────────┴────────────╯${NC}"
+
+    rm -f /tmp/auth_success_db.log
+
+    # ==========================================
+    # INPUT & SELEKSI
+    # ==========================================
+    echo -e ""
+    read -p " Pilih Nomor User [1-$i] atau [x] Keluar: " choice
+    
+    if [[ "$choice" == "x" || "$choice" == "X" ]]; then
+        clear
+        exit 0
+    elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "$i" ]; then
+        selected_user="${user_list[$((choice-1))]}"
+        show_user_detail "$selected_user"
+    else
+        echo -e "${RED} Pilihan tidak valid!${NC}"
+        sleep 1
+        clear
+        show_user_list
+    fi
+}
+
+# --- FUNGSI TAMPILKAN DETAIL USER ---
+function show_user_detail() {
+    local Login="$1"
+    
+    # Ambil Data dari DB SSH (Gunakan spasi setelah $Login untuk mencegah match pada user yang mirip)
+    DB_DATA=$(grep -E "^#ssh# $Login " "$DB_FILE" 2>/dev/null | tail -n 1)
+    
+    Pass=$(echo "$DB_DATA" | awk '{print $3}')
+    [ -z "$Pass" ] && Pass="???"
+    
+    Quota=$(echo "$DB_DATA" | awk '{print $4}')
+    [ -z "$Quota" ] && Quota="0"
+    
+    iplimit=$(echo "$DB_DATA" | awk '{print $5}')
+    [ -z "$iplimit" ] && iplimit="2"
+
+    exp1=$(echo "$DB_DATA" | awk '{print $6}')
+    exp2=$(echo "$DB_DATA" | awk '{print $7}')
+    exp3=$(echo "$DB_DATA" | awk '{print $8}')
+    db_exp_date="$exp1 $exp2 $exp3"
+
+    exp_str=$(chage -l "$Login" 2>/dev/null | grep "Account expires" | cut -d: -f2)
+    if [[ -z "$exp_str" ]]; then
+        exp_date_fmt="$db_exp_date"
+        [[ -z "$exp_date_fmt" || "$exp_date_fmt" == "  " ]] && exp_date_fmt="Unknown"
+    else
+        exp_date_fmt=$(date -d "$exp_str" +"%d %b, %Y" 2>/dev/null || echo "Unlimited")
+    fi
+    
+    clear
+    echo ""
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "🔵 DETAIL AKUN SSH & ZIVPN 🔵" 
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "➤ Domain        : $domain" 
+    echo -e "➤ Username      : $Login" 
+    echo -e "➤ Password      : $Pass" 
+    echo -e "➤ ZIVPN Token   : $Login" 
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "➤ Limit Ip      : $iplimit Device" 
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "➤ IP            : $IP" 
+    echo -e "➤ Limit Quota   : $Quota GB" 
+    echo -e "➤ Host Slowdns  : ${NS}" 
+    echo -e "➤ Isp           : $ISP" 
+    echo -e "➤ Location      : $CITY" 
+    echo -e "➤ Port OpenSSH  : 443, 80, 22" 
+    echo -e "➤ Port DNS      : 443, 53 ,22 " 
+    echo -e "➤ Port SSH UDP  : 1-65535" 
+    echo -e "➤ Port ZIVPN    : $UDP_ZIVPN" 
+    echo -e "➤ Port Dropbear : 443, 109" 
+    echo -e "➤ Port SSH WS   : 80, 8080, 8880, 2082" 
+    echo -e "➤ Port OVPN SSL : 443" 
+    echo -e "➤ Port OVPN TCP : 443, 1194" 
+    echo -e "➤ Port OVPN UDP : 2200" 
+    echo -e "➤ BadVPN UDP    : 7100, 7300, 7300" 
+    echo -e "➤ Pub Key       : ${PUB}" 
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "𝗣𝗮𝘆𝗹𝗼𝗮𝗱 𝗪𝗲𝗯𝘀𝗼𝗰𝗸𝗲𝘁 :\nGET / HTTP/1.1[crlf]host: $domain[crlf]Upgrade: Websocket[crlf][crlf]" 
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "𝗣𝗮𝘆𝗹𝗼𝗮𝗱 𝗦𝗦𝗟 / 𝗧𝗟𝗦 : \nGET wss://BUG.COM/ HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf]" 
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "OVPN Download    : https://$domain:81/" 
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "Berakhir Pada      : $exp_date_fmt" 
+    echo -e "\033[1;93m━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m" 
+    echo -e "\033[5m\033[35mTERIMAKASIH \033[34mSUDAH BERBELANJA \033[31mDI MASTONI GANTENG\033[0m" 
+    
+    echo ""
+    read -n 1 -s -r -p "Tekan sembarang tombol untuk kembali ke daftar user..."
+    clear
+    show_user_list
+}
+
+# --- JALANKAN PROGRAM ---
+show_user_list

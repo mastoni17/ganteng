@@ -1,39 +1,96 @@
 #!/bin/bash
+
+R='\033[0m'
+P='\033[1;37m'
+K='\033[1;33m'
+C='\033[0;36m'
+
+# Background Block
+BG_E='\033[43m\033[1;30m' # Emas (Teks Hitam)
+BG_B='\033[44m\033[1;37m' # Biru
+BG_U='\033[45m\033[1;37m' # Ungu
+BG_M='\033[41m\033[1;37m' # Merah
+Kedip='\033[5m'
+# Border Kiri & Kanan & Titik Dua (Simbol)
+# Ini saya buat variabel biar kodingan di bawah tidak berantakan
+ki="${C}│${R}"   # Garis Kiri
+ka="${C}│${R}"   # Garis Kanan
+tt="${C}:${R}"   # Titik Dua
+
+# Garis Datar (Sesuaikan panjangnya manual jika kurang pas)
+Garis="${C}────────────────────────────────────────────${R}"
+Atas="${C}┌$Garis┐${R}"
+Tengah="${C}├$Garis┤${R}"
+Bawah="${C}└$Garis┘${R}"
+
 clear
-echo -e "\033[0;32m ┌──────────────────────────────────────────┐\033[0m"
-echo -e "\033[0;32m │\033[0m            \033[0;36mPORT SERVICE INFO\033[0m             \033[0;32m|\033[0m"
-echo -e "\033[0;32m └──────────────────────────────────────────┘\033[0m"
-echo -e "\033[0;32m┌─────────────────────────────────────────────┐"
-echo -e "\033[0;32m│       >>> Service & Port                    │"
-echo -e "\033[0;32m│   - Open SSH                : 443, 80, 22   │"
-echo -e "\033[0;32m│   - Dropbear                : 443, 109, 143 │"
-echo -e "\033[0;32m│   - Dropbear Websocket      : 443, 109      │"
-echo -e "\033[0;32m│   - SSH Websocket SSL       : 443           │"
-echo -e "\033[0;32m│   - SSH Websocket           : 80            │"
-echo -e "\033[0;32m│   - OpenVPN SSL             : 443           │"
-echo -e "\033[0;32m│   - OpenVPN Websocket SSL   : 443           │"
-echo -e "\033[0;32m│   - OpenVPN TCP             : 443, 1194     │"
-echo -e "\033[0;32m│   - OpenVPN UDP             : 2200          │"
-echo -e "\033[0;32m│   - Nginx Webserver         : 443, 80, 81   │"
-echo -e "\033[0;32m│   - Haproxy Loadbalancer    : 443, 80       │"
-#echo -e "\033[0;32m│   - DNS Server              : 443, 53,      │"
-#echo -e "\033[0;32m│   - DNS Client              : 443, 88       │"
-echo -e "\033[0;32m│   - OpenVPN Websocket SSL   : 443           │"
-#echo -e "\033[0;32m│   - XRAY DNS (SLOWDNS)      : 443, 53       │"
-echo -e "\033[0;32m│   - XRAY Vmess TLS          : 443           │"
-echo -e "\033[0;32m│   - XRAY Vmess gRPC         : 443           │"
-echo -e "\033[0;32m│   - XRAY Vmess None TLS     : 80            │"
-echo -e "\033[0;32m│   - XRAY Vless TLS          : 443           │"
-echo -e "\033[0;32m│   - XRAY Vless gRPC         : 443           │"
-echo -e "\033[0;32m│   - XRAY Vless None TLS     : 80            │"
-echo -e "\033[0;32m│   - Trojan gRPC             : 443           │"
-echo -e "\033[0;32m│   - Trojan WS               : 443           │"
-echo -e "\033[0;32m│   - Shadowsocks WS          : 443           │"
-echo -e "\033[0;32m│   - BadVPN 1                : 7100          │"
-echo -e "\033[0;32m│   - BadVPN 2                : 7200          │"
-echo -e "\033[0;32m│   - BadVPN 3                : 7300          │"
-#echo -e "\033[0;32m│   - Proxy Squid             : 3128          │"
-echo -e "\033[0;32m└─────────────────────────────────────────────┘"
+echo -e ""
+echo -e "        ${Kedip}${K}⚡ PORT SERVICE INFORMATION ⚡${R}"
+echo -e ""
+
+# ==========================================================
+# BAGIAN 1: SSH (Tinggal atur spasi di keyboard)
+# ==========================================================
+echo -e "$Atas"
+# Header Block (Spasi diatur manual agar warna penuh)
+echo -e "$ki${BG_E}              SSH & TUNNELING               ${R}$ka"
+echo -e "$Tengah"
+
+# CARA EDIT: Tambah spasi sebelum simbol $tt untuk geser titik dua
+#            Tambah spasi sebelum simbol $ka untuk geser garis kanan
+echo -e "$ki 🔓 Open SSH             $tt ${K}443, 80, 22      ${R}$ka"
+echo -e "$ki 🐻 Dropbear             $tt ${K}443, 109, 143    ${R}$ka"
+echo -e "$ki 🔌 Dropbear WS          $tt ${K}443, 109         ${R}$ka"
+echo -e "$ki 🚀 SSH WS SSL           $tt ${K}443              ${R}$ka"
+echo -e "$ki 🚀 SSH Websocket        $tt ${K}80               ${R}$ka"
+echo -e "$Bawah"
+echo -e ""
+
+# ==========================================================
+# BAGIAN 2: OPENVPN
+# ==========================================================
+echo -e "$Atas"
+echo -e "$ki${BG_B}              OPENVPN & PROXY               ${R}$ka"
+echo -e "$Tengah"
+
+echo -e "$ki 🛡️ OpenVPN SSL           $tt ${K}443              ${R}$ka"
+echo -e "$ki 🛡️ OpenVPN WS SSL        $tt ${K}443              ${R}$ka"
+echo -e "$ki 🛡️ OpenVPN TCP           $tt ${K}443, 1194        ${R}$ka"
+echo -e "$ki 🛡️ OpenVPN UDP           $tt ${K}2200             ${R}$ka"
+echo -e "$ki 🎮 BadVPN UDP           $tt ${K}7100-7300        ${R}$ka"
+echo -e "$Bawah"
+echo -e ""
+
+# ==========================================================
+# BAGIAN 3: XRAY CORE
+# ==========================================================
+echo -e "$Atas"
+echo -e "$ki${BG_U}             XRAY / V2RAY CORE              ${R}$ka"
+echo -e "$Tengah"
+
+echo -e "$ki ⚡ XRAY Vmess TLS       $tt ${K}443              ${R}$ka"
+echo -e "$ki ⚡ XRAY Vmess gRPC      $tt ${K}443              ${R}$ka"
+echo -e "$ki 🌑 XRAY Vmess NoTLS     $tt ${K}80               ${R}$ka"
+echo -e "$ki ⚡ XRAY Vless TLS       $tt ${K}443              ${R}$ka"
+echo -e "$ki ⚡ XRAY Vless gRPC      $tt ${K}443              ${R}$ka"
+echo -e "$ki 🌑 XRAY Vless NoTLS     $tt ${K}80               ${R}$ka"
+echo -e "$ki 🐎 Trojan gRPC          $tt ${K}443              ${R}$ka"
+echo -e "$ki 🐎 Trojan WS            $tt ${K}443              ${R}$ka"
+echo -e "$ki 👻 Shadowsocks WS       $tt ${K}443              ${R}$ka"
+echo -e "$Bawah"
+echo -e ""
+
+# ==========================================================
+# BAGIAN 4: WEB SERVER
+# ==========================================================
+echo -e "$Atas"
+echo -e "$ki${BG_M}                 WEB SERVER                 ${R}$ka"
+echo -e "$Tengah"
+
+echo -e "$ki 🌐 Nginx Webserver      $tt ${K}443, 80, 81      ${R}$ka"
+echo -e "$ki ⚖️ Haproxy Loadbal       $tt ${K}443, 80          ${R}$ka"
+echo -e "$Bawah"
+
 echo ""
-read -n 1 -s -r -p "Press any key to back on menu"
+read -n 1 -s -r -p " Press any key to back on menu"
 menu

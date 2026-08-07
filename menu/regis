@@ -23,5 +23,3 @@ Green_background="\033[42;37m"
 Red_background="\033[41;37m"
 Suffix="\033[0m"
 NC='\e[0m'
-
-echo -e " ${GREEN} AWOAMWOKAOWKAOWKAOWK 😂🗿 ${NC}"

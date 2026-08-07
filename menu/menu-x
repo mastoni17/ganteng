@@ -1,7 +1,7 @@
 #!/bin/bash
 # COLOR VALIDATION
 clear
-y='\033[1;33m' #yellow
+y='\033[1;33m'
 BGX="\033[42m"
 CYAN="\033[96m"
 z="\033[96m"
@@ -14,340 +14,533 @@ green='\033[0;32m'
 grenbo="\e[92;1m"
 purple="\033[1;95m"
 YELL='\033[0;33m'
-# DEFINISI WARNA GRADASI MANUAL
-G1="\033[1;31m" # Merah Terang
-G2="\033[1;33m" # Kuning Terang
-# ------------------------------------------
+white='\033[1;37m'
 
-ISP=$(cat /root/.info/.isp)
-CITY=$(cat /root/.info/.city)
-IPVPS=$(curl -s ipv4.icanhazip.com)
-NS=$(cat /etc/xray/dns)
-domain=$(cat /etc/xray/domain)
-RAM=$(free -m | awk 'NR==2 {print $2}')
-USAGERAM=$(free -m | awk 'NR==2 {print $3}')
-MEMOFREE=$(printf '%-1s' "$(free -m | awk 'NR==2{printf "%.2f%%", $3*100/$2 }')")
-LOADCPU=$(printf '%-0.00001s' "$(top -bn1 | awk '/Cpu/ { cpu = "" 100 - $8 "%" }; END { print cpu }')")
-MODEL=$(cat /etc/os-release | grep -w PRETTY_NAME | head -n1 | sed 's/=//g' | sed 's/"//g' | sed 's/PRETTY_NAME//g')
-CORE=$(printf '%-1s' "$(grep -c cpu[0-9] /proc/stat)")
-DATEVPS=$(date +'%d-%m-%Y')
-TIMEZONE=$(printf '%(%H-%M-%S)T')
-SERONLINE=$(uptime -p | cut -d " " -f 2-10000)
-clear
+G1="\033[1;31m" 
+G2="\033[1;33m" 
+
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        if (len <= 1) { print text; exit; }
+        # Emas -> Biru -> Ungu
+        rs=255; gs=215; bs=0;
+        rm=0;   gm=128; bm=255;
+        re=138; ge=43;  be=226;
+
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(rs + (rm - rs) * f);
+                g = int(gs + (gm - gs) * f);
+                b = int(bs + (bm - bs) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(rm + (re - rm) * f);
+                g = int(gm + (ge - gm) * f);
+                b = int(bm + (be - bm) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+
+print_gradient_footer() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        if (len <= 1) { print text; exit; }
+        # Ungu -> Biru -> Emas
+        rs=138; gs=43;  bs=226;
+        rm=0;   gm=128; bm=255;
+        re=255; ge=215; be=0;
+
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(rs + (rm - rs) * f);
+                g = int(gs + (gm - gs) * f);
+                b = int(bs + (bm - bs) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(rm + (re - rm) * f);
+                g = int(gm + (ge - gm) * f);
+                b = int(bm + (be - bm) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+
 MYIP=$(curl -sS ipv4.icanhazip.com)
+IPVPS=$MYIP
+
+ISP=$(cat /root/.info/.isp 2>/dev/null)
+CITY=$(cat /root/.info/.city 2>/dev/null)
+NS=$(cat /etc/xray/dns 2>/dev/null)
+domain=$(cat /etc/xray/domain 2>/dev/null)
+RAM=$(free -m | awk 'NR==2 {print $2}')
+LOADCPU=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1"%"}')
+
+MODEL=$(cat /etc/os-release | grep -w PRETTY_NAME | head -n1 | sed 's/=//g' | sed 's/"//g' | sed 's/PRETTY_NAME//g')
+CORE=$(grep -c cpu[0-9] /proc/stat)
+DATEVPS=$(date +'%d-%m-%Y')
+TIMEZONE=$(date +'%H-%M-%S')
+SERONLINE=$(uptime -p | cut -d " " -f 2-10000)
+
 echo ""
 izinsc="https://raw.githubusercontent.com/mastoni17/ijin/refs/heads/main/regmas"
-# USERNAME
-rm -f /usr/bin/user
-username=$(curl ${izinsc} | grep $MYIP | awk '{print $2}')
-echo "$username" >/usr/bin/user
-# validity
-rm -f /usr/bin/e
-valid=$(curl ${izinsc} | grep $MYIP | awk '{print $3}')
-echo "$valid" >/usr/bin/e
+
+# USERNAME CHECK (Cached)
+if [ -f /usr/bin/user ]; then
+    username=$(cat /usr/bin/user)
+    valid=$(cat /usr/bin/e)
+else
+    USER_DATA=$(curl -s ${izinsc} | grep $MYIP)
+    username=$(echo "$USER_DATA" | awk '{print $2}')
+    valid=$(echo "$USER_DATA" | awk '{print $3}')
+    echo "$username" >/usr/bin/user
+    echo "$valid" >/usr/bin/e
+fi
+
 # DETAIL ORDER
-username=$(cat /usr/bin/user)
-oid=$(cat /usr/bin/ver)
-exp=$(cat /usr/bin/e)
-clear
+oid=$(cat /usr/bin/ver 2>/dev/null)
+exp=$valid
+
 # CERTIFICATE STATUS
+today=$(date +"%Y-%m-%d")
 d1=$(date -d "$valid" +%s)
 d2=$(date -d "$today" +%s)
 certifacate=$(((d1 - d2) / 86400))
-# VPS Information
-DATE=$(date +'%Y-%m-%d')
-datediff() {
-    d1=$(date -d "$1" +%s)
-    d2=$(date -d "$2" +%s)
-    echo -e "$COLOR1 $NC Expiry In   : $(( (d1 - d2) / 86400 )) Days"
-}
-mai="datediff "$Exp" "$DATE""
 
 # Status Expired Or Active
-Info="(${green}Active${NC})"
-Error="(${RED}Expired${NC})"
-today=`date -d "0 days" +"%Y-%m-%d"`
-Exp1=$(curl ${izinsc} | grep $MYIP | awk '{print $3}')
-if [[ $today < $Exp1 ]]; then
-sts="${Info}"
+if [[ "$d1" -ge "$d2" ]]; then
+    sts="${green}Active${NC}"
 else
-sts="${Error}"
+    sts="${RED}Expired${NC}"
 fi
+
 clear
-
-# OS Uptime
-uptime="$(uptime -p | cut -d " " -f 2-10)"
-
-# Getting CPU Information
-cpu_usage1="$(ps aux | awk 'BEGIN {sum=0} {sum+=$3}; END {print sum}')"
-cpu_usage="$((${cpu_usage1/\.*} / ${coREDiilik:-1}))"
-cpu_usage+=" %"
-
-WKT=$(curl -s ipinfo.io/timezone )
-DAY=$(date +%A)
-DATE=$(date +%m/%d/%Y)
-DATE2=$(date -R | cut -d " " -f -5)
-IPVPS=$(curl -s ipv4.icanhazip.com)
-cname=$( awk -F: '/model name/ {name=$2} END {print name}' /proc/cpuinfo )
-cores=$( awk -F: '/model name/ {core++} END {print core}' /proc/cpuinfo )
-freq=$( awk -F: ' /cpu MHz/ {freq=$2} END {print freq}' /proc/cpuinfo )
+# Getting RAM Info
 tram=$( free -m | awk 'NR==2 {print $2}' )
-uram=$( free -m | awk 'NR==2 {print $3}' )
-fram=$( free -m | awk 'NR==2 {print $4}' )
-clear
-ssh_service=$(/etc/init.d/ssh status | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
-dropbear_service=$(/etc/init.d/dropbear status | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
-haproxy_service=$(systemctl status haproxy | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
-xray_service=$(systemctl status xray | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
-nginx_service=$(systemctl status nginx | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
-#Status | Geo Project
-clear
 
-#####INFOAKUN
-vlx=$(grep -c -E "^#& " "/etc/xray/config.json")
+# Status Check
+ssh_status=$(systemctl is-active --quiet ssh && echo "Running" || echo "Dead")
+
+##### INFO AKUN XRAY
+vlx=$(grep -c -E "^#& " "/etc/xray/config.json" 2>/dev/null || echo 0)
 let vla=$vlx/2
-vmc=$(grep -c -E "^### " "/etc/xray/config.json")
+vmc=$(grep -c -E "^### " "/etc/xray/config.json" 2>/dev/null || echo 0)
 let vma=$vmc/2
-ssh1="$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)"
-trx=$(grep -c -E "^#! " "/etc/xray/config.json")
+ssh1=$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd | wc -l)
+trx=$(grep -c -E "^#! " "/etc/xray/config.json" 2>/dev/null || echo 0)
 let trb=$trx/2
-ssx=$(grep -c -E "^#ss# " "/etc/xray/config.json")
+ssx=$(grep -c -E "^#ss# " "/etc/xray/config.json" 2>/dev/null || echo 0)
 let ssa=$ssx/2
-###########
 KANAN="\033[1;32m<\033[1;33m<\033[1;31m<\033[1;31m$NC"
 KIRI="\033[1;32m>\033[1;33m>\033[1;31m>\033[1;31m$NC"
-########
-r="\033[1;31m"  #REDTERANG
+r="\033[1;31m" 
 a=" ${CYAN}ACCOUNT PREMIUM" 
-#clear
-clear
 
+# ==========================================
+# SUB-MENU PERBAIKAN XRAY
+# ==========================================
+function perbaikan_xray() {
+    clear
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    print_gradient "             MENU PERBAIKAN XRAY CONFIG     "
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    echo -e " [1]  Backup config.json"
+    echo -e " [2]  Ubah UUID Client"
+    echo -e " [3]  Ubah Username / Email Client"
+    echo -e " [x]  Kembali ke Menu Utama"
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    read -p " Pilih Opsi [1-3 atau x]: " xray_opt
+
+    case $xray_opt in
+        1)
+            clear
+            echo -e "${YELL}➤ Melakukan backup /etc/xray/config.json...${NC}"
+            bckp_name="config.json.bak_$(date +%Y%m%d_%H%M%S)"
+            cp /etc/xray/config.json /etc/xray/$bckp_name
+            sleep 1
+            echo -e "${green}Backup berhasil disimpan sebagai:${NC} /etc/xray/$bckp_name"
+            read -n 1 -s -r -p " Press any key to back..."
+            perbaikan_xray
+            ;;
+        2)
+            clear
+            # Mengekstrak daftar UUID dan Nama dari config.json
+            mapfile -t user_uuid_list < <(grep '"email":' /etc/xray/config.json | sed -E 's/.*"(id|password)": "([^"]+)".*"email": "([^"]+)".*/\3 \2/' | sort | uniq)
+            
+            echo -e "${Blue}══════════════════════════════════════════════════════════════${NC}"
+            print_gradient "                   DAFTAR UUID CLIENT XRAY                    "
+            echo -e "${Blue}══════════════════════════════════════════════════════════════${NC}"
+            printf " ${purple}%-4s %-15s %-40s${NC}\n" "No" "Username" "UUID / Password"
+            echo -e "${CYAN} ------------------------------------------------------------${NC}"
+            
+            no=1
+            for line in "${user_uuid_list[@]}"; do
+                usr=$(echo "$line" | awk '{print $1}')
+                uid=$(echo "$line" | awk '{print $2}')
+                printf " ${YELL}[%02d]${NC} ${white}%-15s${NC} ${CYAN}%-40s${NC}\n" "$no" "$usr" "$uid"
+                ((no++))
+            done
+            echo -e "${Blue}══════════════════════════════════════════════════════════════${NC}"
+            echo ""
+            
+            echo -e "${YELL}➤ Mengubah UUID Client${NC}"
+            read -p " Masukkan Nomor / Username / UUID Lama : " input_lama
+            if [[ -z "$input_lama" ]]; then perbaikan_xray; return; fi
+            
+            # Sistem Smart Input
+            old_uuid=""
+            if [[ "$input_lama" =~ ^[0-9]+$ ]]; then
+                idx=$((input_lama - 1))
+                if [[ $idx -ge 0 && $idx -lt ${#user_uuid_list[@]} ]]; then
+                    old_uuid=$(echo "${user_uuid_list[$idx]}" | awk '{print $2}')
+                fi
+            else
+                for line in "${user_uuid_list[@]}"; do
+                    usr=$(echo "$line" | awk '{print $1}')
+                    uid=$(echo "$line" | awk '{print $2}')
+                    if [[ "$input_lama" == "$usr" || "$input_lama" == "$uid" ]]; then
+                        old_uuid="$uid"
+                        break
+                    fi
+                done
+            fi
+            
+            if [[ -z "$old_uuid" ]]; then
+                echo -e " ${RED}[!] Data tidak ditemukan!${NC}"
+                sleep 2
+                perbaikan_xray
+                return
+            fi
+            
+            echo -e " ${green}UUID Terpilih:${NC} $old_uuid"
+            read -p " Masukkan UUID Baru (Kosongkan untuk auto-generate) : " new_uuid
+            
+            if [[ -z "$new_uuid" ]]; then
+                new_uuid=$(cat /proc/sys/kernel/random/uuid)
+                echo -e " ${green}UUID Baru di-generate:${NC} $new_uuid"
+            fi
+            
+            # Eksekusi penggantian UUID
+            sed -i "s/$old_uuid/$new_uuid/g" /etc/xray/config.json
+            sed -i "s/$old_uuid/$new_uuid/g" /etc/vmess/.vmess.db 2>/dev/null
+            sed -i "s/$old_uuid/$new_uuid/g" /etc/vless/.vless.db 2>/dev/null
+            sed -i "s/$old_uuid/$new_uuid/g" /etc/trojan/.trojan.db 2>/dev/null
+            sed -i "s/$old_uuid/$new_uuid/g" /etc/shadowsocks/.shadowsocks.db 2>/dev/null
+            
+            # Restart Xray
+            systemctl restart xray > /dev/null 2>&1
+            echo -e "${green}UUID Berhasil Diubah! Service Xray telah direstart.${NC}"
+            read -n 1 -s -r -p " Press any key to back..."
+            perbaikan_xray
+            ;;
+        3)
+            clear
+            # Mengekstrak daftar UUID dan Nama dari config.json
+            mapfile -t user_uuid_list < <(grep '"email":' /etc/xray/config.json | sed -E 's/.*"(id|password)": "([^"]+)".*"email": "([^"]+)".*/\3 \2/' | sort | uniq)
+            
+            echo -e "${Blue}══════════════════════════════════════════════════════════════${NC}"
+            print_gradient "                 DAFTAR USERNAME CLIENT XRAY                  "
+            echo -e "${Blue}══════════════════════════════════════════════════════════════${NC}"
+            printf " ${purple}%-4s %-15s %-40s${NC}\n" "No" "Username" "UUID / Password"
+            echo -e "${CYAN} ------------------------------------------------------------${NC}"
+            
+            no=1
+            for line in "${user_uuid_list[@]}"; do
+                usr=$(echo "$line" | awk '{print $1}')
+                uid=$(echo "$line" | awk '{print $2}')
+                printf " ${YELL}[%02d]${NC} ${white}%-15s${NC} ${CYAN}%-40s${NC}\n" "$no" "$usr" "$uid"
+                ((no++))
+            done
+            echo -e "${Blue}══════════════════════════════════════════════════════════════${NC}"
+            echo ""
+            
+            echo -e "${YELL}➤ Mengubah Username / Email Client${NC}"
+            read -p " Masukkan Nomor / Username Lama : " input_lama
+            if [[ -z "$input_lama" ]]; then perbaikan_xray; return; fi
+            
+            # Sistem Smart Input
+            old_user=""
+            if [[ "$input_lama" =~ ^[0-9]+$ ]]; then
+                idx=$((input_lama - 1))
+                if [[ $idx -ge 0 && $idx -lt ${#user_uuid_list[@]} ]]; then
+                    old_user=$(echo "${user_uuid_list[$idx]}" | awk '{print $1}')
+                fi
+            else
+                for line in "${user_uuid_list[@]}"; do
+                    usr=$(echo "$line" | awk '{print $1}')
+                    if [[ "$input_lama" == "$usr" ]]; then
+                        old_user="$usr"
+                        break
+                    fi
+                done
+            fi
+            
+            if [[ -z "$old_user" ]]; then
+                echo -e "${RED}Username '$input_lama' tidak ditemukan di config!${NC}"
+                sleep 2
+                perbaikan_xray
+                return
+            fi
+            
+            echo -e " ${green}Username Terpilih:${NC} $old_user"
+            read -p " Masukkan Username Baru : " new_user
+            if [[ -z "$new_user" ]]; then perbaikan_xray; return; fi
+            
+            # Ganti Nama di config.json dan DB dengan Word Boundary (\b) agar presisi
+            sed -i "s/\b$old_user\b/$new_user/g" /etc/xray/config.json
+            sed -i "s/\b$old_user\b/$new_user/g" /etc/vmess/.vmess.db 2>/dev/null
+            sed -i "s/\b$old_user\b/$new_user/g" /etc/vless/.vless.db 2>/dev/null
+            sed -i "s/\b$old_user\b/$new_user/g" /etc/trojan/.trojan.db 2>/dev/null
+            sed -i "s/\b$old_user\b/$new_user/g" /etc/shadowsocks/.shadowsocks.db 2>/dev/null
+            
+            # Ganti nama pada folder limit IP
+            for proto in vmess vless trojan shadowsocks; do
+                if [ -f "/etc/kyt/limit/$proto/ip/$old_user" ]; then
+                    mv "/etc/kyt/limit/$proto/ip/$old_user" "/etc/kyt/limit/$proto/ip/$new_user"
+                fi
+            done
+            
+            # Ganti nama pada folder Kuota
+            for proto in vmess vless trojan shadowsocks; do
+                if [ -f "/etc/$proto/$old_user" ]; then
+                    mv "/etc/$proto/$old_user" "/etc/$proto/$new_user"
+                fi
+            done
+
+            # Update link OpenClash (jika ada file HTML)
+            if [ -f "/var/www/html/vmess-$old_user.txt" ]; then
+                mv "/var/www/html/vmess-$old_user.txt" "/var/www/html/vmess-$new_user.txt"
+                sed -i "s/\b$old_user\b/$new_user/g" "/var/www/html/vmess-$new_user.txt"
+            fi
+            
+            # Restart Xray
+            systemctl restart xray > /dev/null 2>&1
+            echo -e "${green}Username berhasil diubah dari '$old_user' menjadi '$new_user'!${NC}"
+            read -n 1 -s -r -p " Press any key to back..."
+            perbaikan_xray
+            ;;
+        x)
+            menu-x
+            ;;
+        *)
+            echo -e "${RED}Pilihan salah!${NC}"
+            sleep 1
+            perbaikan_xray
+            ;;
+    esac
+}
+
+clear
 echo -e " "
-echo -e "${white}╭══════════════════════════════════════════════════╮${NC}"
-echo -e "\033[1;31m>\033[1;33m>\033[1;32m>${CYAN} Welcome To MASTONI GANTENG AUTOSCRIPT PREMIUM  \033[1;32m<\033[1;33m<\033[1;31m<${NC}"
-echo -e "${white}╰══════════════════════════════════════════════════╯${NC}"
-echo -e " ${YELL}╭══════════════════════════════════════════════════╮${NC}"
-echo -e "  ${z}$NC [${white}01${NC}]$grenbo MENU TRIAL$NC           ${z}  $NC [${white}08${NC}]$purple BACKUP/ RESTORE "    
-echo -e "  ${z}$NC [${white}02${NC}]$grenbo MENU DELL USER EXP$NC    ${z}$NC  [${white}09${NC}]$purple RENNEW DOMAIN$NC" 
-echo -e "  ${z}$NC [${white}03${NC}]$grenbo MENU AUTO REBOOT$NC      ${z} $NC [${white}10${NC}]$purple RUNNING$NC" 
-echo -e "  ${z}$NC [${white}04${NC}]$grenbo MENU RESTART SERVICE$NC   ${z}$NC [${white}11${NC}]$purple REGIST IP$NC"
-echo -e "  ${z}$NC [${white}05${NC}]$grenbo MENU BOT TELEGRAM$NC     ${z} $NC [${white}12${NC}]$purple UPDATE SCRIPT$NC"
-echo -e "  ${z}$NC [${white}06${NC}]$grenbo CHANGE BANNER$NC         ${z} $NC [${white}13${NC}]$purple FIX CERT SSL$NC"
-echo -e "  ${z}$NC [${white}07${NC}]$grenbo INFO PORT$NC             ${z} $NC [${white}14${NC}]$purple INSTALL UDP$NC"
-echo -e "  ${z}$NC [${white}15${NC}]$grenbo DOWNGRADE X-RAY$NC       ${z} $NC [${white}16${NC}]$purple INSTALL ZIVPN$NC"
-echo -e " ${YELL}╰══════════════════════════════════════════════════╯${NC}"
-echo -e " ${white} ╭════════════════════════════════════════════════╮${NC}"
-echo -e " ${white}   PILIH MENU DENGAN CARA KETIK 1/16 LALU ENTER $NC"
-echo -e " ${white} ╰════════════════════════════════════════════════╯${NC}"
-echo -e "   ${Blue}╭════════════════════════════════════════════╮${NC}"
-# BAGIAN YANG DIUBAH (BLOCK DIHAPUS, DIGANTI GRADASI)
-echo -e "   ${Blue}   $NC${G1}Dev${G2}eloper${NC}   ${z}=${NC} MASTONI GANTENG"
-echo -e "   ${Blue}   $NC${G1}Tel${G2}egram${NC}    ${z}=${NC} @Mastonigt"
-echo -e "   ${Blue}   $NC${G1}IP ${G2}ADDRESS${NC}  ${z}=${NC} $IPVPS${NC}"
-echo -e "   ${Blue}   $NC${G1}Us${G2}er${NC}        ${z}=${NC} $username"
-echo -e "   ${Blue}   $NC${G1}Exp${G2} Script${NC}  ${z}=${NC} $exp $certifacate Days$NC $sts"
-echo -e "   ${Blue}╰═══════════════════════════════════════════╯${NC}"
-echo -e "\033[1;31m>\033[1;33m>\033[1;32m>${CYAN} THANKS YOU FOR USING MASTONI GANTENG STORE  \033[1;32m<\033[1;33m<\033[1;31m<${NC}"
+print_gradient " ═════════════════════════════════════════════════════"
+print_gradient "                  MENU UTILITY SYSTEM      "
+print_gradient "             ══════════════════════════════"
+echo -e "${z}$NC [${white}01${NC}]$grenbo DATA USER DELET & EXP $NC  ${z} $NC [${white}08${NC}]$purple RENNEW DOMAIN$NC"  
+echo -e "${z}$NC [${white}02${NC}]$grenbo MENU AUTO REBOOT$NC        ${z} $NC [${white}09${NC}]$purple RUNNING$NC" 
+echo -e "${z}$NC [${white}03${NC}]$grenbo MENU RESTART SERVICE$NC    ${z} $NC [${white}10${NC}]$purple REGIST IP$NC"
+echo -e "${z}$NC [${white}04${NC}]$grenbo MENU BOT TELEGRAM$NC       ${z} $NC [${white}11${NC}]$purple UPDATE SCRIPT$NC"
+echo -e "${z}$NC [${white}05${NC}]$grenbo CHANGE BANNER$NC           ${z} $NC [${white}12${NC}]$purple FIX CERT SSL$NC"
+echo -e "${z}$NC [${white}06${NC}]$grenbo INFO PORT$NC               ${z} $NC [${white}13${NC}]$purple INSTALL UDP$NC"
+echo -e "${z}$NC [${white}07${NC}]$grenbo BACKUP/ RESTORE$NC         ${z} $NC [${white}14${NC}]$purple DOWNGRADE X-RAY$NC"
+echo -e "${z}$NC [${white}15${NC}]$grenbo INSTALL ZIVPN$NC           ${z} $NC [${white}16${NC}]$purple CLEAN CACHE & LOG$NC"
+echo -e "${z}$NC [${white}17${NC}]$grenbo CHANGE DNS$NC              ${z} $NC [${white}18${NC}]$purple FIX DNS & CURL$NC"
+echo -e "${z}$NC [${white}19${NC}]$grenbo FIX XRAY CONFIG$NC         ${z} $NC"
+print_gradient " ═════════════════════════════════════════════════════"
+print_gradient_footer "     SELECT THE MENU BY TYPING 1/19 THEN ENTER "
+print_gradient " ═════════════════════════════════════════════════════"
+echo -e "${Blue} $NC${G1}Developer${NC}      ${z}=${NC} MASTONI GANTENG"
+echo -e "${Blue} $NC${G1}Telegram${NC}       ${z}=${NC} @HookageLegend"
+echo -e "${Blue} $NC${G1}IP ADDRESS${NC}     ${z}=${NC} $IPVPS${NC}"
+echo -e "${Blue} $NC${G1}User${NC}           ${z}=${NC} $username"
+echo -e "${Blue} $NC${G1}Exp Script${NC}     ${z}=${NC} $exp $certifacate Days$NC $sts"
+print_gradient " ═════════════════════════════════════════════════════"
 echo -e ""
-read -p " PILIH OPSI MENU [ 1-16 atau x] ➤ : " opt
+read -p " PILIH OPSI MENU [ 1-19 atau x] ➤ : " opt
 echo -e ""
 case $opt in
-1 | 01)
-clear
-m-trial
-;;
-2 | 02)
-clear
-xp
-echo ""
-echo -e " ${GREEN} Back to menu in 1 sec ${NC}"
-sleep 1
-menu-x
-;;
-3 | 03)
-clear
-autoreboot
-;;
-4 | 04)
-clear
-restart
-reboot
-;;
+1 | 01) clear ; list-user ;;
+2 | 02) clear ; autoreboot ;;
+3 | 03) clear ; restart ; reboot ;;
+4 | 04) clear ; m-bot ;;
 5 | 05)
-clear
-m-bot
-;;
-6 | 06)
-clear
-echo -e "Edit Banner SSH Message " | lolcat
-sleep 2
-echo -e "Loading..........⏳" | lolcat
-sleep 5
-nano /etc/kyt.txt
-clear
-echo -e "${green}ANDA YAKIN UNTUK MEMASANG BANNER INI ? $NC"
-echo -e ""
-read -p "SILAHKAN PILIH OPSI BERIKUT [Y/N]:" arg
-if [[ $arg == 'Y' ]]; then
-  echo -e "${Blue}Tindakan Diteruskan! $NC"
-  echo -e "${green}START. . . $NC"
-elif [[ $arg == 'y' ]]; then
-  echo -e "${Blue}Tindakan Diteruskan! $NC"
-  clear
-  echo -e "${Blue}START . . .$NC"
-elif [[ $arg == 'N' ]]; then
-  echo -e "${RED}Tindakan Dihentikan! $NC"
-  sleep 1
-  clear
-  menu
-  exit 0
-elif [[ $arg == 'n' ]]; then
-  echo -e "${RED}Tindakan Dihentikan! $NC"
-  sleep 1
-  clear
-  rm -f /root/update.sh
-  exit 0
-else
-  echo -e "${RED}Argumen Tidak Diketahui! $NC"
-  sleep 1
-  clear
-  rm -f /root/update.sh
-  exit 0
-fi
-##########
-clear
-reboot
-;;
-7 | 07)
-clear
-prot
-;;
-8 | 08)
-clear
-menu-backup
-;;
-9 | 09)
-clear
-addhost
-;;
+    clear
+    echo -e "Edit Banner SSH Message " | lolcat
+    sleep 2
+    echo -e "Loading..........⏳" | lolcat
+    sleep 2 # Dikurangi biar cepat
+    nano /etc/kyt.txt
+    clear
+    echo -e "${green}ANDA YAKIN UNTUK MEMASANG BANNER INI ? $NC"
+    echo -e ""
+    read -p "SILAHKAN PILIH OPSI BERIKUT [Y/N]:" arg
+    if [[ $arg == 'Y' || $arg == 'y' ]]; then
+      echo -e "${Blue}Tindakan Diteruskan! $NC"
+      clear
+      echo -e "${Blue}START . . .$NC"
+      service ssh restart
+      service dropbear restart
+    else
+      echo -e "${RED}Tindakan Dihentikan! $NC"
+      sleep 1
+      clear
+      menu
+      exit 0
+    fi
+    clear
+    menu-x # Kembali ke menu-x bukan reboot
+    ;;
+6 | 06) clear ; prot ;;
+7 | 07) clear ; menu-backup ;;
+8 | 08) clear ; addhost ;;
+9 | 09) clear ; run ;;
 10)
-clear
-run
-;;
+    clear
+    echo -e "${green}Checking Permission Data...${NC}"
+    data_mentah=$(curl -sS ${izinsc} | grep $MYIP)
+    cek_user=$(echo "$data_mentah" | awk '{print $2}')
+    cek_exp=$(echo "$data_mentah" | awk '{print $3}')
+    cek_reg=$(echo "$data_mentah" | awk '{print $4}') 
+    if [[ -z "$cek_reg" ]]; then cek_reg="Tidak Tersedia"; fi
+
+    now_date=$(date -d "0 days" +"%Y-%m-%d")
+    d1=$(date -d "$cek_exp" +%s)
+    d2=$(date -d "$now_date" +%s)
+    sisa_hari=$(( (d1 - d2) / 86400 ))
+
+    clear
+    echo -e " "
+    echo -e "${Blue}══════════════════════════════════════════${NC}"
+    print_gradient "            USER LICENSE STATUS             "
+    echo -e "${Blue}   ═══════════════════════════════════${NC}"
+    echo -e "${y} IP VPS         $NC: $MYIP"
+    echo -e "$NC${y} Username       $NC: $cek_user"
+    echo -e "$NC${y} Registered     $NC: $cek_reg"
+    echo -e "$NC${y} Expired Date   $NC: $cek_exp"
+    echo -e "$NC${y} Validity       $NC: $sisa_hari Days"
+    echo -e "$NC${y} Status         $NC: $sts"
+    echo -e "${Blue}══════════════════════════════════════════${NC}"
+    echo -e " "
+    read -n 1 -s -r -p " Press any key to back on menu"
+    menu-x
+    ;;
 11)
-clear
-echo -e "${green}Checking Permission Data...${NC}"
-# Mengambil data terbaru dari URL izinsc
-# Pastikan format di file text github adalah: IP USER EXP DATE_REGISTER
-# Contoh: 123.123.123.123 mastoni 2025-12-31 2025-01-01
-data_mentah=$(curl -sS ${izinsc} | grep $MYIP)
-
-# Parsing data berdasarkan kolom (awk)
-cek_user=$(echo "$data_mentah" | awk '{print $2}')
-cek_exp=$(echo "$data_mentah" | awk '{print $3}')
-cek_reg=$(echo "$data_mentah" | awk '{print $4}') # Kolom 4 untuk tanggal daftar
-
-# Jika kolom tanggal daftar (kolom 4) kosong, isi dengan strip
-if [[ -z "$cek_reg" ]]; then
-    cek_reg="Tidak Tersedia"
-fi
-
-# Hitung ulang sisa hari (validity)
-now_date=$(date -d "0 days" +"%Y-%m-%d")
-d1=$(date -d "$cek_exp" +%s)
-d2=$(date -d "$now_date" +%s)
-sisa_hari=$(( (d1 - d2) / 86400 ))
-
-# Tampilan Menu Status
-clear
-echo -e " "
-echo -e "   ${Blue}╭════════════════════════════════════════════╮${NC}"
-echo -e "   ${Blue}│$NC${f}           USER LICENSE STATUS              $NC${Blue}│$NC"
-echo -e "   ${Blue}╰════════════════════════════════════════════╯${NC}"
-echo -e "   ${Blue}╭════════════════════════════════════════════╮${NC}"
-echo -e "   ${Blue}│$NC${y} IP VPS       $NC: $MYIP"
-echo -e "   ${Blue}│$NC${y} Username     $NC: $cek_user"
-echo -e "   ${Blue}│$NC${y} Registered   $NC: $cek_reg"
-echo -e "   ${Blue}│$NC${y} Expired Date $NC: $cek_exp"
-echo -e "   ${Blue}│$NC${y} Validity     $NC: $sisa_hari Days"
-echo -e "   ${Blue}│$NC${y} Status       $NC: $sts"
-echo -e "   ${Blue}╰════════════════════════════════════════════╯${NC}"
-echo -e " "
-read -n 1 -s -r -p " Press any key to back on menu"
-menu-x
-;;
-12)
-clear
-rm -f /root/update.sh
-wget -q https://raw.githubusercontent.com/mastoni17/ganteng/refs/heads/main/update.sh
-chmod +x update.sh
-./update.sh
-;;
-13)
-clear
-fixcert
-;;
+    clear
+    rm -f /root/update.sh
+    wget -q https://raw.githubusercontent.com/mastoni17/ganteng/refs/heads/main/update.sh
+    chmod +x update.sh
+    ./update.sh
+    ;;
+12) clear ; fixcert ;;
+13) clear
+    print_install "Menginstall Udp-custom"
+    wget -q https://raw.githubusercontent.com/mastoni17/ganteng/refs/heads/main/udp-custom/udp-custom.sh
+    chmod +x udp-custom.sh
+    bash udp-custom.sh
+    rm -fr udp-custom.sh
+    print_success "Udp-custom"
+    ;;
 14)
-clear
-echo -e "${green}ANDA YAKIN UNTUK MEMASANG SCRIPT INI ? $NC"
-echo -e "${green}MINIMAL RAM 2 GB BIAR DISK TIDAK FULL $NC"
-echo -e "${green}OS SUPPORT UBUNTU 20.04 ONLY $NC"
-echo -e ""
-read -p "SUDAH LAPOR KE ADMIN ? [Y/N]:" arg
-if [[ $arg == 'Y' ]]; then
-  echo -e "${Blue}Tindakan Diteruskan! $NC"
-  echo -e "${green}START. . . $NC"
-elif [[ $arg == 'y' ]]; then
-  echo -e "${Blue}Tindakan Diteruskan! $NC"
-  clear
-  echo -e "${Blue}START . . .$NC"
-elif [[ $arg == 'N' ]]; then
-  echo -e "${RED}Tindakan Dihentikan! $NC"
-  sleep 1
-  clear
-  menu
-  exit 0
-elif [[ $arg == 'n' ]]; then
-  echo -e "${RED}Tindakan Dihentikan! $NC"
-  sleep 1
-  clear
-  rm -f /root/install-udp
-  exit 0
-else
-  echo -e "${RED}Argumen Tidak Diketahui! $NC"
-  sleep 1
-  clear
-  rm -f /root/install-udp
-  exit 0
-fi
-##########
-clear
-wget --load-cookies /tmp/cookies.txt ${UDPX} -O install-udp && rm -rf /tmp/cookies.txt && chmod +x install-udp && ./install-udp
-systemctl status udp-custom
-;;
+    clear
+    rm xray-downgrade
+    wget -q https://raw.githubusercontent.com/mastoni17/ganteng/refs/heads/main/menu/xray-downgrade
+    chmod +x xray-downgrade
+    ./xray-downgrade
+    ;;
 15)
-clear
-rm xray-downgrade
-wget -q https://github.com/mastoni17/ganteng/raw/refs/heads/main/menu/xray-downgrade
-chmod +x xray-downgrade
-./xray-downgrade
-;;
-16)
-clear
-wget -q https://raw.githubusercontent.com/mastoni17/install/refs/heads/main/zivpn
-chmod +x zivpn
-./zivpn
-systemctl status zivpn
-;;
-0 | 00)
-exit
-;;
-x)
-menu-x
-;;
-*) clear ;
-echo -e
-menu-x
-;;
+    clear
+    wget -q https://raw.githubusercontent.com/mastoni17/install/refs/heads/main/zivpn
+    chmod +x zivpn
+    ./zivpn
+    systemctl status zivpn
+    ;;
+16) clear ; clearlog ;;
+17)
+    clear
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    echo -e "            ${CYAN}PILIH DNS YANG INGIN DIGUNAKAN${NC}"
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    echo -e " [1]  Google DNS (8.8.8.8 / 8.8.4.4)"
+    echo -e " [2]  Cloudflare DNS (1.1.1.1 / 1.0.0.1)"
+    echo -e " [3]  AdGuard DNS (Anti-Iklan)"
+    echo -e " [4]  OpenDNS"
+    echo -e " [5]  Custom DNS (Input Manual)"
+    echo -e " [x]  Kembali ke Menu Utama"
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    read -p " Pilih DNS [1-5 atau x]: " dns_opt
+    
+    case $dns_opt in
+        1) dns1="8.8.8.8"; dns2="8.8.4.4" ;;
+        2) dns1="1.1.1.1"; dns2="1.0.0.1" ;;
+        3) dns1="94.140.14.14"; dns2="94.140.15.15" ;;
+        4) dns1="208.67.222.222"; dns2="208.67.220.220" ;;
+        5) 
+            read -p " Masukkan DNS 1: " dns1
+            read -p " Masukkan DNS 2: " dns2
+            ;;
+        x) menu-x ;;
+        *) echo "Pilihan salah!"; sleep 1; menu-x ;;
+    esac
+
+    if [[ -n $dns1 ]]; then
+        echo -e "\n${green}Menerapkan DNS: $dns1 & $dns2 secara permanen...${NC}"
+        
+        chattr -i /etc/resolv.conf 2>/dev/null
+        rm -f /etc/resolv.conf
+        echo "nameserver $dns1" > /etc/resolv.conf
+        echo "nameserver $dns2" >> /etc/resolv.conf
+        chattr +i /etc/resolv.conf
+        
+        sleep 2
+        echo -e "${green}DNS berhasil diperbarui dan dibuat permanen!${NC}"
+        echo -e "${YELL}Catatan: /etc/resolv.conf sekarang berstatus Immutable (Terkunci).${NC}\n"
+        read -n 1 -s -r -p " Press any key to back on menu"
+        menu-x
+    fi
+    ;;
+18)
+    clear
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    echo -e "            ${CYAN}MEMPERBAIKI DNS & CURL...${NC}"
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    
+    echo -e "${YELL}➤ Membuka kunci resolv.conf...${NC}"
+    chattr -i /etc/resolv.conf 2>/dev/null
+    
+    echo -e "${YELL}➤ Mengatur ulang konfigurasi DNS ke default...${NC}"
+    rm -f /etc/resolv.conf
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+    
+    echo -e "${YELL}➤ Merestart layanan jaringan (systemd-resolved)...${NC}"
+    systemctl restart systemd-resolved 2>/dev/null
+    
+    echo -e "${YELL}➤ Memperbaiki dependensi Curl dan Sertifikat SSL...${NC}"
+    apt-get update -y
+    apt-get install --reinstall curl -y
+    apt-get install --reinstall ca-certificates -y
+    update-ca-certificates
+    
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    echo -e "${green}Proses Perbaikan Selesai!${NC}"
+    echo -e "${white}Silakan coba gunakan command curl / update script kembali.${NC}"
+    echo -e "${Blue}══════════════════════════════════════════════════${NC}"
+    read -n 1 -s -r -p " Press any key to back on menu"
+    menu-x
+    ;;
+19) clear ; perbaikan_xray ;;
+0 | 00) exit ;;
+x) clear ; menu ;;
+*) clear ; echo -e ; menu-x ;;
 esac
-clear

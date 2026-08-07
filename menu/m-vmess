@@ -1,40 +1,18 @@
 #!/bin/bash
-Green="\e[92;1m"
-RED="\033[31m"
-YELLOW="\033[33m"
-BLUE="\033[36m"
-FONT="\033[0m"
-GREENBG="\033[42;37m"
-REDBG="\033[41;37m"
-OK="${Green}--->${FONT}"
-ERROR="${RED}[ERROR]${FONT}"
-GRAY="\e[1;30m"
-NC='\e[0m'
-red='\e[1;31m'
-green='\e[0;32m'
-DF='\e[39m'
-Bold='\e[1m'
-Blink='\e[5m'
-yell='\e[33m'
-red='\e[31m'
-green='\e[32m'
-blue='\e[34m'
-PURPLE='\e[35m'
-cyan='\e[36m'
-Lred='\e[91m'
-Lgreen='\e[92m'
-Lyellow='\e[93m'
-NC='\e[0m'
+NC='\033[0m'
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 ORANGE='\033[0;33m'
-LIGHT='\033[0;37m'
-grenbo="\e[92;1m"
-red() { echo -e "\\033[32;1m${*}\\033[0m"; }
-# Getting
+CYAN='\033[0;36m'
+WHITE='\033[0;37m'
+BOLD='\033[1m'
+BORDER="${CYAN}"
+
 ipsaya=$(curl -sS ipv4.icanhazip.com)
 data_server=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Date | sed -e 's/< Date: //')
 date_list=$(date +"%Y-%m-%d" -d "$data_server")
 data_ip="https://raw.githubusercontent.com/mastoni17/ijin/refs/heads/main/regmas"
+
 checking_sc() {
   useexp=$(wget -qO- $data_ip | grep $ipsaya | awk '{print $3}')
   if [[ $date_list < $useexp ]]; then
@@ -43,55 +21,232 @@ checking_sc() {
     echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
     echo -e "\033[42m          404 NOT FOUND AUTOSCRIPT          \033[0m"
     echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
-    echo -e ""
-    echo -e "            ${RED}PERMISSION DENIED !${NC}"
-    echo -e "   \033[0;33mYour VPS${NC} $ipsaya \033[0;33mHas been Banned${NC}"
-    echo -e "     \033[0;33mBuy access permissions for scripts${NC}"
-    echo -e "             \033[0;33mContact Admin :${NC}"
-    echo -e "      ${GREEN}TELEGRAM${NC} https://t.me/MastoniOrderBot"
-    echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
     exit 0
   fi
 }
 checking_sc
 clear
-echo -e "\033[1;93m┌──────────────────────────────────────────┐\033[0m"
-echo -e "                 MENU VMESS              $NC"
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
-echo -e "\033[1;93m┌──────────────────────────────────────────┐\033[0m"
-echo -e "  ${ORANGE}1.${NC} \033[0;36m Creating Vmess Account WS/GRPC${NC}"
-echo -e "  ${ORANGE}2.${NC} \033[0;36m Creating Trial Vmess Account WS/GRPC${NC}"
-echo -e "  ${ORANGE}3.${NC} \033[0;36m Delete Vmess Account WS/GRPC${NC}"
-echo -e "  ${ORANGE}4.${NC} \033[0;36m Renew Vmess Account${NC}"
-echo -e "  ${ORANGE}5.${NC} \033[0;36m Check Vmess login Account${NC}"
-echo -e "  ${ORANGE}6.${NC} \033[0;36m Check Vmess Account${NC}"
-echo -e "  ${ORANGE}7.${NC} \033[0;36m Check Data User${NC}"
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
+
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        r_start=255; g_start=215; b_start=0;
+        r_mid=0;      g_mid=128;   b_mid=255;
+        r_end=138;    g_end=43;    b_end=226;
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(r_start + (r_mid - r_start) * f);
+                g = int(g_start + (g_mid - g_start) * f);
+                b = int(b_start + (b_mid - b_start) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(r_mid + (r_end - r_mid) * f);
+                g = int(g_mid + (g_end - g_mid) * f);
+                b = int(b_mid + (b_end - b_mid) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+
+line() { echo -e "${BORDER} ╭───────────────────────────────────╮${NC}"; }
+mid()  { echo -e "${BORDER} ├───────────────────────────────────┤${NC}"; }
+close(){ echo -e "${BORDER} ╰───────────────────────────────────╯${NC}"; }
+BACKUP_FILE="/etc/xray/vmess_backup"
+restore_vmess() {
+    clear
+    print_gradient "╭═══════════════════════════════════╮"
+    print_gradient "│      RESTORE DELETED VMESS        │"
+    print_gradient "╰═══════════════════════════════════╯"
+    echo -e ""
+    
+    # Cek apakah file backup ada
+    if [[ ! -f "$BACKUP_FILE" ]] || [[ ! -s "$BACKUP_FILE" ]]; then
+        echo -e "${RED} No archived users found.${NC}"
+        echo -e ""
+        read -n 1 -s -r -p " Press any key to return"
+        m-vmess
+        return
+    fi
+
+    echo -e " List of archived users:"
+    echo -e "${BORDER} ───────────────────────────────────${NC}"
+    echo -e " No  |  Username  |  UUID"
+    echo -e "${BORDER} ───────────────────────────────────${NC}"
+
+    # Tampilkan list user dari file backup
+    i=1
+    while IFS=' ' read -r b_user b_uuid; do
+        printf " %-3s | %-10s | %s\n" "$i" "$b_user" "${b_uuid:0:15}..."
+        i=$((i+1))
+    done < "$BACKUP_FILE"
+    echo -e "${BORDER} ───────────────────────────────────${NC}"
+    
+    read -p " Select Number to Restore (x to cancel): " selection
+    if [[ "$selection" == "x" ]]; then m-vmess; return; fi
+
+    # Ambil data berdasarkan nomor pilihan
+    data_restore=$(sed -n "${selection}p" "$BACKUP_FILE")
+    
+    if [[ -z "$data_restore" ]]; then
+        echo -e "${RED} Invalid selection.${NC}"
+        sleep 1
+        restore_vmess
+        return
+    fi
+
+    # Pisahkan User dan UUID
+    user_res=$(echo "$data_restore" | awk '{print $1}')
+    uuid_res=$(echo "$data_restore" | awk '{print $2}')
+
+    # Cek apakah user sudah ada di config aktif (mencegah duplikat)
+    if grep -q "### $user_res" /etc/xray/config.json; then
+        echo -e "${RED} User $user_res already exists in active config!${NC}"
+        # Hapus dari backup karena sudah aktif
+        sed -i "/^$user_res /d" "$BACKUP_FILE"
+        read -n 1 -s -r -p " Press any key to return"
+        m-vmess
+        return
+    fi
+
+    echo -e ""
+    echo -e " Restore User : ${GREEN}$user_res${NC}"
+    echo -e " Original UUID: ${ORANGE}$uuid_res${NC}"
+    read -p " Active Duration (Days): " masaaktif
+
+    # Hitung Expired Baru
+    exp=$(date -d "$masaaktif days" +"%Y-%m-%d")
+    
+    # === INJEKSI KE CONFIG XRAY ===
+    # Format JSON Vmess (Sesuaikan dengan struktur config Xray Anda)
+    # Biasanya dimasukkan di dalam "clients": [ ... ]
+    # Kita cari pattern "clients": [ dan masukkan di baris setelahnya
+    
+    sed -i '/#vmess$/a\### '"$user_res $exp"'\
+},{"id": "'""$uuid_res""'","alterId": 0,"email": "'""$user_res""'"' /etc/xray/config.json
+
+    # Hapus dari file backup setelah berhasil direstore
+    sed -i "/^$user_res /d" "$BACKUP_FILE"
+
+    # Buat ulang file TLS/None TLS cache (Opsional, tergantung script login Anda butuh ini atau tidak)
+    cat > /etc/xray/$user_res-tls.json <<EOF
+{
+      "v": "2",
+      "ps": "$user_res",
+      "add": "$domain",
+      "port": "443",
+      "id": "$uuid_res",
+      "aid": "0",
+      "net": "ws",
+      "path": "/vmess",
+      "type": "none",
+      "host": "",
+      "tls": "tls"
+}
+EOF
+
+    systemctl restart xray
+    echo -e ""
+    echo -e "${GREEN} User $user_res successfully restored!${NC}"
+    echo -e " Valid until: $exp"
+    echo -e ""
+    read -n 1 -s -r -p " Press any key to return"
+    m-vmess
+}
+
+xp_vmess() {
+    clear
+    print_gradient "╭═══════════════════════════════════╮"
+    print_gradient "│      AUTO DELETE EXPIRED VMESS    │"
+    print_gradient "╰═══════════════════════════════════╯"
+    echo -e ""
+    echo -e "\033[0;33m Checking Expired VMess Users...\033[0m"
+    
+    # Pastikan file backup ada
+    if [[ ! -f "$BACKUP_FILE" ]]; then touch "$BACKUP_FILE"; fi
+
+    data=( `cat /etc/xray/config.json | grep '^###' | cut -d ' ' -f 2 | sort | uniq` )
+    now=`date +"%Y-%m-%d"`
+    found=0
+    
+    for user in "${data[@]}"
+    do
+        # Ambil tanggal exp
+        exp=$(grep -w "^### $user" "/etc/xray/config.json" | cut -d ' ' -f 3 | sort | uniq)
+        if [[ -z "$exp" ]]; then continue; fi
+
+        d1=$(date -d "$exp" +%s)
+        d2=$(date -d "$now" +%s)
+        
+        if [[ "$d1" -lt "$d2" ]]; then
+            uuid=$(cat /etc/xray/config.json | grep -w "$user" -A 3 | grep "id" | awk -F '"' '{print $4}' | head -n 1)
+            if [[ -n "$uuid" ]]; then
+                if ! grep -q "^$user " "$BACKUP_FILE"; then
+                    echo "$user $uuid" >> "$BACKUP_FILE"
+                    echo -e "${CYAN} [ARCHIVE] User $user saved to recycle bin.${NC}"
+                fi
+            fi
+            echo -e "${RED} [DEL] User $user Expired ($exp).${NC}"
+            
+            user_safe=$(echo "$user" | sed 's/\//\\\//g')
+            sed -i "/^### $user_safe $exp/,/^},{/d" /etc/xray/config.json
+            sed -i "/^### $user_safe $exp/,/^},{/d" /etc/xray/config.json
+            rm -f /etc/xray/$user-tls.json
+            found=1
+        fi
+    done
+    
+    if [[ $found -eq 0 ]]; then
+        echo -e "${GREEN} No expired users found.${NC}"
+    else
+        systemctl restart xray
+        echo -e "${GREEN} Cleanup & Archiving Success.${NC}"
+    fi
+    echo -e ""
+    read -n 1 -s -r -p " Press any key to return"
+    m-vmess
+}
+
 echo -e ""
-read -p "Select From Options [ 1 - 7 ] : " menu
+print_gradient "╭═══════════════════════════════════╮"
+print_gradient "│       XRAY VMESS MANAGEMENT       │"
+print_gradient "╰═══════════════════════════════════╯"
+echo -e ""
+
+line
+
+printf "${BORDER} │ ${ORANGE}1.${NC} ${CYAN}%-31s ${BORDER}│${NC}\n" "Create Account Vmess"
+printf "${BORDER} │ ${ORANGE}2.${NC} ${CYAN}%-31s ${BORDER}│${NC}\n" "Create Trial Vmess"
+mid
+printf "${BORDER} │ ${ORANGE}3.${NC} ${CYAN}%-31s ${BORDER}│${NC}\n" "Renew Account Vmess"
+printf "${BORDER} │ ${ORANGE}4.${NC} ${CYAN}%-31s ${BORDER}│${NC}\n" "Delete Account Vmess"
+mid
+printf "${BORDER} │ ${ORANGE}5.${NC} ${CYAN}%-31s ${BORDER}│${NC}\n" "Check Login Vmess"
+printf "${BORDER} │ ${ORANGE}6.${NC} ${CYAN}%-31s ${BORDER}│${NC}\n" "List Member Vmess"
+printf "${BORDER} │ ${ORANGE}7.${NC} ${CYAN}%-31s ${BORDER}│${NC}\n" "Check Detail User"
+mid
+printf "${BORDER} │ ${ORANGE}8.${NC} ${RED}%-31s ${BORDER}│${NC}\n" "Auto Delete & Archive Exp"
+printf "${BORDER} │ ${ORANGE}9.${NC} ${GREEN}%-31s ${BORDER}│${NC}\n" "Restore / Reactivate User"
+mid
+printf "${BORDER} │ ${ORANGE}x.${NC} ${ORANGE}%-31s ${BORDER}│${NC}\n" "Back To Main Menu"
+close
+echo -e ""
+read -p " Select From Options [1-9 or x] : " menu
+
 case $menu in
-1)   clear ;
-    addws
-    ;;
-2) clear ;
-    trialws
-    ;;
-3) clear ;
-    delws
-    ;;
-4) clear ;
-    renewws
-    ;;
-5) clear ;
-    cekws
-    ;;
-6) clear ;
-    member-ws
-    ;;
-7) clear ;
-    datauser
-    ;;
-*) clear ;
-    menu
-    ;;
+1) clear ; addws ;;
+2) clear ; trialws ;;
+3) clear ; renewws ;;
+4) clear ; delws ;;
+5) clear ; cekws ;;
+6) clear ; member-ws ;;
+7) clear ; datauser ;;
+8) xp_vmess ;;
+9) restore_vmess ;;
+x) menu ;;
+*) m-vmess ;;
 esac

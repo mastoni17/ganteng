@@ -1,0 +1,124 @@
+#!/bin/bash
+NC='\033[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+YELLOW='\033[0;33m'
+WHITE='\033[0;37m'
+BORDER="${CYAN}"
+
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        r_start=255; g_start=215; b_start=0;
+        r_mid=0;      g_mid=128;   b_mid=255;
+        r_end=138;    g_end=43;    b_end=226;
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(r_start + (r_mid - r_start) * f);
+                g = int(g_start + (g_mid - g_start) * f);
+                b = int(b_start + (b_mid - b_start) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(r_mid + (r_end - r_mid) * f);
+                g = int(g_mid + (g_end - g_mid) * f);
+                b = int(b_mid + (b_end - b_mid) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+
+clear
+echo -e ""
+print_gradient "╭════════════════════════════════════════════════════╮"
+print_gradient "│               SET LIMIT LOGIN IP SSH               │"
+print_gradient "╰════════════════════════════════════════════════════╯"
+echo -e ""
+
+# Mengambil semua user SSH
+users=($(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd))
+
+if [[ ${#users[@]} -eq 0 ]]; then
+    echo -e " ${RED}Tidak ada user SSH yang terdaftar.${NC}"
+    echo -e ""
+    read -n 1 -s -r -p " Press any key to return"
+    m-sshws
+    exit 0
+fi
+
+# Header Tabel
+echo -e "${BORDER} ╭──────────────────────────────────────────────────╮${NC}"
+printf "${BORDER} │ ${WHITE}%-3s | %-15s | %-10s | %-12s${BORDER}│${NC}\n" "No" "Username" "Limit IP" "Exp Date"
+echo -e "${BORDER} ├──────────────────────────────────────────────────┤${NC}"
+
+i=1
+declare -A user_map
+for user in "${users[@]}"; do
+    # Mengambil nilai limit IP
+    limit_ip="-"
+    if [[ -f "/etc/kyt/limit/ssh/ip/$user" ]]; then
+        limit_ip=$(cat "/etc/kyt/limit/ssh/ip/$user" | tr -d '\n\r ')
+    elif [[ -f "/etc/limit/ssh/ip/$user" ]]; then
+        limit_ip=$(cat "/etc/limit/ssh/ip/$user" | tr -d '\n\r ')
+    fi
+    
+    # Mengambil masa expired
+    exp="-"
+    exp_date=$(chage -l "$user" 2>/dev/null | grep "Account expires" | awk -F": " '{print $2}')
+    if [[ -n "$exp_date" && "$exp_date" != "never" ]]; then
+        exp=$(date -d "$exp_date" +"%Y-%m-%d" 2>/dev/null)
+    fi
+
+    # Menampilkan baris tabel yang lurus presisi
+    printf "${BORDER} │ ${GREEN}%-3s${NC} | ${YELLOW}%-15s${NC} | ${CYAN}%-10s${NC} | ${WHITE}%-12s${BORDER}│${NC}\n" "$i" "${user:0:15}" "$limit_ip" "$exp"
+    
+    user_map[$i]="$user"
+    ((i++))
+done
+echo -e "${BORDER} ╰──────────────────────────────────────────────────╯${NC}"
+echo -e ""
+
+# Meminta input nomor atau username
+read -p " Ketik Nomor/Username (Ketik 'x' batal) : " input_user
+if [[ "$input_user" == "x" || -z "$input_user" ]]; then
+    m-sshws
+    exit 0
+fi
+
+# Cek apakah yang diketik itu nomor urut atau username
+target_user="$input_user"
+if [[ "$input_user" =~ ^[0-9]+$ ]] && [[ -n "${user_map[$input_user]}" ]]; then
+    target_user="${user_map[$input_user]}"
+fi
+
+if ! getent passwd "$target_user" > /dev/null 2>&1; then
+    echo -e " ${RED}Error: User '$target_user' tidak ditemukan!${NC}"
+    sleep 2
+    m-sshws
+    exit 0
+fi
+
+read -p " Masukkan Batas Login (Angka) : " limit
+if ! [[ "$limit" =~ ^[0-9]+$ ]]; then
+    echo -e " ${RED}Error: Masukkan angka yang valid!${NC}"
+    sleep 2
+    m-sshws
+    exit 0
+fi
+
+# Simpan ke folder monitor dan ke inti keamanan (PAM)
+mkdir -p /etc/kyt/limit/ssh/ip
+echo "$limit" > "/etc/kyt/limit/ssh/ip/$target_user"
+sed -i "/^$target_user hard maxlogins/d" /etc/security/limits.conf
+echo "$target_user hard maxlogins $limit" >> /etc/security/limits.conf
+
+echo -e ""
+echo -e " ${GREEN}Berhasil!${NC} Limit Login untuk ${YELLOW}$target_user${NC} disetel ke ${CYAN}$limit perangkat${NC}."
+echo -e ""
+read -n 1 -s -r -p " Press any key to return"
+m-sshws

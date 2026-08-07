@@ -1,0 +1,194 @@
+#!/bin/bash
+clear
+# --- DEFINISI WARNA ---
+yellow="\033[0;33m"
+ungu="\033[0;35m"
+Red="\033[91;1m"
+Xark="\033[0m"
+BlueCyan="\033[5;36m"
+WhiteBe="\033[5;37m"
+GreenBe="\033[5;32m"
+YellowBe="\033[5;33m"
+BlueBe="\033[5;34m"
+nama=$(cat /etc/xray/username 2>/dev/null || echo "Admin")
+
+# --- FUNGSI GARIS & BANNER ---
+function baris_panjang() {
+  echo -e "${BlueCyan} ——————————————————————————————————— ${Xark} "
+}
+
+function xdxl_Banner() {
+    clear
+    baris_panjang
+    echo -e "${ungu}            $nama       ${Xark} "
+    baris_panjang
+}
+
+function Sc_Credit(){
+    sleep 1
+    baris_panjang
+    echo -e "${ungu}  Terimakasih Telah Menggunakan ${Xark}"
+    echo -e "${ungu}           Script Credit ${Xark}"
+    echo -e "${ungu}           $nama ${Xark}"
+    baris_panjang
+    echo ""
+    read -rp "press any key for back"
+    menu
+}
+
+# --- ANIMASI LOADING ---
+duration=3
+frames=("██10%" "█████35%" "█████████65%" "█████████████80%" "█████████████████████90%" "█████████████████████████100%")
+num_frames=${#frames[@]}
+num_iterations=$((duration))
+
+Loading_Animasi() {
+    for ((i = 0; i < num_iterations; i++)); do
+        clear
+        index=$((i % num_frames))
+        color_code=$((31 + i % 7))
+        echo ""
+        echo ""
+        echo ""
+        echo -e "\e[1;${color_code}m ${frames[$index]}\e[0m"
+        sleep 0.5
+    done
+}
+
+function Loading_Succes() {
+    clear
+    echo -e  "\033[5;32mSucces\033[0m"
+    sleep 2
+    clear
+}
+
+# --- LIST MEMBER SHADOWSOCKS ---
+function Daftar_Member_SS() {
+    baris_panjang
+    echo ""
+    # Mengambil list dari database agar sinkron dengan perbaikan sebelumnya
+    if [[ -f /etc/shadowsocks/.shadowsocks.db ]]; then
+        grep "^### " "/etc/shadowsocks/.shadowsocks.db" | cut -d ' ' -f 2-3 | column -t | sort | uniq | lolcat
+    else
+        echo -e "${Red} Database tidak ditemukan! ${Xark}"
+    fi
+    echo ""
+    baris_panjang
+    echo ""
+}
+
+# --- LOGIKA CEK CONFIG ---
+function Cek_Config_SS() {
+    read -rp "Input Username : " user
+    if [ -z "$user" ]; then
+        echo -e "User Tidak Ditemukan!!!"
+        read -n 1 -s -r -p "Enter Back To Menu"
+        menu
+    else
+        # 1. Ambil Data Dasar
+        CITY=$(cat /etc/xray/city 2>/dev/null)
+        ISP=$(cat /etc/xray/isp 2>/dev/null)
+        domain=$(cat /etc/xray/domain 2>/dev/null)
+        
+        # 2. Ambil Limit IP & Quota
+        # Sesuaikan path limit dengan script installer (biasanya di folder kyt atau limits)
+        if [[ -f /etc/kyt/limit/shadowsocks/ip/$user ]]; then
+            iplimit=$(cat /etc/kyt/limit/shadowsocks/ip/$user)
+        else
+            iplimit="Unlimited"
+        fi
+
+        if [[ -f /etc/shadowsocks/$user ]]; then
+            Quota1=$(cat /etc/shadowsocks/$user)
+            Quota=$((Quota1 / 1024 / 1024 / 1024))
+        else
+            Quota="Unlimited"
+        fi
+
+        # 3. Ambil Password & Method dari Config JSON
+        # Logic: Cari string user, lalu ambil password di blok yang sama
+        # Note: Ini asumsi format JSON standar. Jika gagal, password dianggap sama dengan user (fallback)
+        pass_config=$(grep -B 1 "email\": \"${user}\"" /etc/xray/config.json | grep "password" | head -n1 | cut -d: -f2 | tr -d '," ')
+        if [[ -z "$pass_config" ]]; then
+            # Coba cari password jika format config berbeda (password = user)
+            password=$user
+        else
+            password=$pass_config
+        fi
+
+        # Ambil Method Cipher
+        method_config=$(grep "method" /etc/xray/config.json | head -n1 | cut -d: -f2 | tr -d '," ')
+        if [[ -z "$method_config" ]]; then
+            method="aes-128-gcm" # Default fallback
+        else
+            method=$method_config
+        fi
+
+        # 4. Ambil Expired dari Database
+        exp=$(grep "^### $user" "/etc/shadowsocks/.shadowsocks.db" | cut -d ' ' -f 3 | head -n1)
+
+        # 5. Generate Link Shadowsocks (Base64 Encode)
+        # Format Link: ss://Base64(method:password@domain:port)#User
+        
+        # Link TLS (Port 443)
+        tmp1="${method}:${password}@${domain}:443"
+        code1=$(echo -n "$tmp1" | base64 -w 0)
+        sslink1="ss://${code1}#${user}"
+
+        # Link HTTP/Non-TLS (Port 80)
+        tmp2="${method}:${password}@${domain}:80"
+        code2=$(echo -n "$tmp2" | base64 -w 0)
+        sslink2="ss://${code2}#${user}"
+
+        # Link GRPC (Jika support)
+        # Format gRPC biasanya beda, ini format universal ss-grpc
+        sslink3="ss://${code1}?mode=gun&security=tls&type=grpc&serviceName=ss-grpc&sni=${domain}#${user}"
+    fi
+}
+
+function Details_Account() {
+    baris_panjang
+    echo -e "\033[37m SHADOWSOCKS XRAY \033[0m"
+    baris_panjang
+    echo -e ""
+    echo -e "\033[37m Remarks      : ${user} "
+    echo -e "\033[37m Domain       : ${domain}"
+    echo -e "\033[37m User Quota   : ${Quota} GB"
+    echo -e "\033[37m User Ip      : ${iplimit} IP"
+    echo -e "\033[37m Port TLS     : 443"
+    echo -e "\033[37m Port HTTP    : 80"
+    echo -e "\033[37m Password     : ${password}"
+    echo -e "\033[37m Cipher       : ${method}"
+    echo -e "\033[37m Locations    : $CITY"
+    echo -e "\033[37m ISP          : $ISP"
+    echo -e "\033[37m ServiceName  : ss-grpc"
+}
+
+function Link_Json() {
+    baris_panjang
+    echo -e "\033[37m Link TLS     : ${sslink1}"
+    baris_panjang
+    echo -e "\033[37m Link NTLS    : ${sslink2}"
+    baris_panjang
+    echo -e "\033[37m Link GRPC    : ${sslink3}"
+    baris_panjang
+}
+
+function Details_Expiry() {
+    baris_panjang
+    echo -e "\033[33m Expiry       : $exp \033[0m "
+}
+
+# --- EKSEKUSI ---
+xdxl_Banner
+echo "     "
+Daftar_Member_SS
+echo "     "
+Cek_Config_SS
+clear
+Loading_Animasi
+Loading_Succes
+Details_Account
+Link_Json
+Details_Expiry
+Sc_Credit

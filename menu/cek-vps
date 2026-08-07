@@ -1,0 +1,320 @@
+#!/bin/bash
+# ======================================================
+#   MASTONI GANTENG: VPS MONITORING & SPEEDTEST v4
+#   (Interactive Menu & Premium Health Dashboard)
+# ======================================================
+
+# --- WARNA TEXT ---
+NC='\033[0m'
+BOLD='\033[1m'
+WHITE='\033[1;37m'
+GRAY='\033[1;30m'
+RED='\033[31m'
+GREEN='\033[32m'
+YELLOW='\033[33m'
+BLUE='\033[36m'
+PURPLE='\033[35m'
+CYAN='\033[38;5;51m'
+BORDER_COLOR='\033[38;5;93m'
+
+# --- SETTING WARNA BACKGROUND HEADER ---
+BG_RED='\033[48;5;88m'
+BG_BLUE='\033[48;5;19m'
+BG_GREEN='\033[48;5;22m'
+BG_ORANGE='\033[48;5;130m'
+BG_PURPLE='\033[48;5;53m'
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        # Definisi Warna: Emas (Gold) -> Biru (Medium Blue) -> Ungu (Blue Violet)
+        r_start=255; g_start=215; b_start=0;
+        r_mid=0;     g_mid=128;   b_mid=255;
+        r_end=138;   g_end=43;    b_end=226;
+
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                # Fase 1: Emas ke Biru
+                f = ratio * 2;
+                r = int(r_start + (r_mid - r_start) * f);
+                g = int(g_start + (g_mid - g_start) * f);
+                b = int(b_start + (b_mid - b_start) * f);
+            } else {
+                # Fase 2: Biru ke Ungu
+                f = (ratio - 0.5) * 2;
+                r = int(r_mid + (r_end - r_mid) * f);
+                g = int(g_mid + (g_end - g_mid) * f);
+                b = int(b_mid + (b_end - b_mid) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+# --- CEK & INSTALL DEPENDENCIES ---
+clear
+if ! command -v vnstat &> /dev/null; then
+    echo -e "${YELLOW}Menginstall vnStat...${NC}"
+    apt-get update && apt-get install vnstat -y > /dev/null 2>&1
+    systemctl enable vnstat
+    systemctl start vnstat
+fi
+
+if ! command -v speedtest-cli &> /dev/null; then
+    echo -e "${YELLOW}Menginstall Speedtest-cli...${NC}"
+    apt-get install python3-pip -y > /dev/null 2>&1
+    pip3 install speedtest-cli > /dev/null 2>&1
+    if ! command -v speedtest-cli &> /dev/null; then
+        apt-get install speedtest-cli -y > /dev/null 2>&1
+    fi
+fi
+
+# Ambil Interface Utama
+IFACE=$(ip route get 8.8.8.8 | awk '{print $5; exit}')
+if [[ ! -d /var/lib/vnstat ]]; then
+    vnstat -u -i $IFACE > /dev/null 2>&1
+fi
+
+# --- FUNGSI GRAFIK BAR PREMIUM ---
+function print_bar() {
+    local pct=$1     
+    local width=20   
+    local fill=$(( pct * width / 100 ))
+    local empty=$(( width - fill ))
+    local color="${GREEN}"
+
+    if [[ $pct -ge 80 ]]; then color="${RED}";
+    elif [[ $pct -ge 60 ]]; then color="${YELLOW}"; fi
+
+    printf "["
+    printf "${color}"
+    for ((i=0; i<fill; i++)); do printf "█"; done
+    printf "${GRAY}"
+    for ((i=0; i<empty; i++)); do printf "▒"; done
+    printf "${NC}] ${color}${pct}%%${NC}"
+}
+
+# --- FUNGSI HEADER KOTAK ---
+function print_box_header() {
+    local title=$1
+    local bg=$2
+    echo -e "${BORDER_COLOR}╭──────────────────────────────────────────────────────╮${NC}"
+    printf "${BORDER_COLOR}│${bg}${BOLD}${WHITE}%-54s${NC}${BORDER_COLOR}│${NC}\n" "   $title"
+    echo -e "${BORDER_COLOR}╰──────────────────────────────────────────────────────╯${NC}"
+}
+
+# --- FUNGSI KEMBALI KE MENU ---
+function back_to_menu() {
+    echo ""
+    echo -e "${YELLOW}Press [ ENTER ] to return to menu...${NC}"
+    read
+    show_menu
+}
+
+# ======================================================
+# 1. FUNGSI SYSTEM RESOURCES
+# ======================================================
+function cek_system() {
+    clear
+    print_box_header "SYSTEM PERFORMANCE" "$BG_RED"
+
+    CPU_IDLE=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print $1}')
+    CPU_USAGE_FLOAT=$(echo "100 - $CPU_IDLE" | bc -l 2>/dev/null || awk "{print 100 - $CPU_IDLE}")
+    CPU_USAGE_INT=$(printf "%.0f" "$CPU_USAGE_FLOAT")
+    CPU_LOAD=$(top -bn1 | grep load | awk '{printf "%.2f", $(NF-2)}')
+    CORE_COUNT=$(nproc)
+
+    RAM_TOTAL=$(free -m | awk 'NR==2{print $2}')
+    RAM_USED=$(free -m | awk 'NR==2{print $3}')
+    RAM_PERSEN=$(awk "BEGIN {printf \"%.0f\", ($RAM_USED / $RAM_TOTAL) * 100}")
+
+    UPTIME=$(uptime -p | cut -d " " -f 2-)
+    MODEL=$(cat /etc/os-release | grep -w PRETTY_NAME | head -n1 | sed 's/=//g' | sed 's/"//g' | sed 's/PRETTY_NAME//g')
+
+    echo -e " ${BOLD}OS System${NC}    : $MODEL"
+    echo -e " ${BOLD}Uptime${NC}       : $UPTIME"
+    echo -e " ${BOLD}CPU Core${NC}     : $CORE_COUNT Core(s) (Load Avg: $CPU_LOAD)"
+    echo -e " ${BOLD}CPU Usage${NC}    : $(print_bar $CPU_USAGE_INT)"
+    echo -e " ${BOLD}RAM Usage${NC}    : $(print_bar $RAM_PERSEN)"
+    echo -e "               ${GRAY}(Used: ${RAM_USED}MB / Total: ${RAM_TOTAL}MB)${NC}"
+    
+    back_to_menu
+}
+
+# ======================================================
+# 2. FUNGSI TRAFFIC MONITOR
+# ======================================================
+function cek_traffic() {
+    clear
+    print_box_header "TRAFFIC MONITORING ($IFACE)" "$BG_BLUE"
+
+    RX_DAY=$(vnstat -d -i $IFACE --oneline | awk -F';' '{print $4}')
+    TX_DAY=$(vnstat -d -i $IFACE --oneline | awk -F';' '{print $5}')
+    TOTAL_DAY=$(vnstat -d -i $IFACE --oneline | awk -F';' '{print $6}')
+
+    RX_MON=$(vnstat -m -i $IFACE --oneline | awk -F';' '{print $9}')
+    TX_MON=$(vnstat -m -i $IFACE --oneline | awk -F';' '{print $10}')
+    TOTAL_MON=$(vnstat -m -i $IFACE --oneline | awk -F';' '{print $11}')
+
+    TOTAL_ALL=$(vnstat -i $IFACE --oneline | awk -F';' '{print $11}')
+
+    if [[ -z "$RX_DAY" ]]; then
+        echo -e "${YELLOW}   Database traffic sedang dikumpulkan...${NC}"
+        vnstat -i $IFACE > /dev/null 2>&1
+    else
+        echo -e "${BORDER_COLOR}┌──────────────────────────────────────────────────────┐${NC}"
+        printf "${BORDER_COLOR}│${NC} ${BOLD}%-15s${NC} | ${GREEN}%-10s${NC} | ${RED}%-10s${NC} | ${CYAN}%-10s${NC} ${BORDER_COLOR}│${NC}\n" "PERIODE" "RX (Down)" "TX (Up)" "TOTAL"
+        echo -e "${BORDER_COLOR}├──────────────────────────────────────────────────────┤${NC}"
+        printf "${BORDER_COLOR}│${NC} %-15s | %-10s | %-10s | %-10s ${BORDER_COLOR}│${NC}\n" "Harian" "$RX_DAY" "$TX_DAY" "$TOTAL_DAY"
+        printf "${BORDER_COLOR}│${NC} %-15s | %-10s | %-10s | %-10s ${BORDER_COLOR}│${NC}\n" "Bulanan" "$RX_MON" "$TX_MON" "$TOTAL_MON"
+        echo -e "${BORDER_COLOR}└──────────────────────────────────────────────────────┘${NC}"
+        echo -e " ${BOLD}Total Traffic (All Time):${NC} $TOTAL_ALL"
+    fi
+    
+    back_to_menu
+}
+
+# ======================================================
+# 3. FUNGSI SERVICE STATUS
+# ======================================================
+function cek_service_status() {
+    clear
+    print_box_header "TUNNELING SERVICE STATUS" "$BG_GREEN"
+
+    check_service() {
+        if systemctl is-active --quiet $1; then echo -e "${GREEN}ON 🟢${NC}"; else echo -e "${RED}OFF 🔴${NC}"; fi
+    }
+
+    SSH=$(check_service ssh)
+    WS=$(check_service ws)
+    DROPBEAR=$(check_service dropbear)
+    HAPROXY=$(check_service haproxy)
+    XRAY=$(check_service xray)
+    NGINX=$(check_service nginx)
+
+    echo -e " ${BOLD}SSH / OVPN${NC}                 ${BOLD}XRAY / WEB${NC}"
+    echo -e " SSH        : $SSH       XRAY Core  : $XRAY"
+    echo -e " Dropbear   : $DROPBEAR       Nginx      : $NGINX"
+    echo -e " Haproxy    : $HAPROXY"
+    echo -e ""
+    echo -e " ${BOLD}CUSTOM TUNNEL${NC}"
+    echo -e " WS Python  : $WS"
+    
+    back_to_menu
+}
+
+# ======================================================
+# 4. FUNGSI SPEEDTEST
+# ======================================================
+function cek_speedtest() {
+    clear
+    print_box_header "SPEEDTEST SERVER (OOKLA)" "$BG_ORANGE"
+    echo -e "${YELLOW}   Sedang melakukan tes kecepatan internet...${NC}"
+
+    speedtest-cli --simple --secure --timeout 20 > /tmp/speedtest.txt 2>/dev/null
+
+    DOWNLOAD=$(cat /tmp/speedtest.txt | grep "Download" | awk '{print $2, $3}')
+    UPLOAD=$(cat /tmp/speedtest.txt | grep "Upload" | awk '{print $2, $3}')
+    PING=$(cat /tmp/speedtest.txt | grep "Ping" | awk '{print $2, $3}')
+
+    if [[ -z "$DOWNLOAD" ]]; then
+        echo -e "${RED}   Gagal/Timeout saat Speedtest.${NC}"
+    else
+        echo -e "${BORDER_COLOR}┌──────────────────────────────────────────────────────┐${NC}"
+        printf "${BORDER_COLOR}│${NC} ${PURPLE}PING${NC}      : %-37s ${BORDER_COLOR}│${NC}\n" "$PING"
+        printf "${BORDER_COLOR}│${NC} ${GREEN}DOWNLOAD${NC} : %-37s ${BORDER_COLOR}│${NC}\n" "$DOWNLOAD"
+        printf "${BORDER_COLOR}│${NC} ${CYAN}UPLOAD${NC}   : %-37s ${BORDER_COLOR}│${NC}\n" "$UPLOAD"
+        echo -e "${BORDER_COLOR}└──────────────────────────────────────────────────────┘${NC}"
+    fi
+    rm -f /tmp/speedtest.txt
+    
+    back_to_menu
+}
+
+# ======================================================
+# 5. FUNGSI HEALTH & TOP APPS (PREMIUM DASHBOARD)
+# ======================================================
+function cek_health() {
+    clear
+    print_box_header "VPS HEALTH & RESOURCES MONITORING" "$BG_PURPLE"
+
+    # --- Disk Usage ---
+    DISK_TOTAL=$(df -h / | awk 'NR==2 {print $2}')
+    DISK_USED=$(df -h / | awk 'NR==2 {print $3}')
+    DISK_PCT=$(df / | awk 'NR==2 {print $5}' | sed 's/%//')
+    
+    # --- RAM Details ---
+    RAM_TOTAL=$(free -m | awk 'NR==2{print $2}')
+    RAM_USED=$(free -m | awk 'NR==2{print $3}')
+    RAM_BUFF=$(free -m | awk 'NR==2{print $6}')
+    RAM_FREE=$(free -m | awk 'NR==2{print $4}')
+    RAM_PERSEN=$(awk "BEGIN {printf \"%.0f\", ($RAM_USED / $RAM_TOTAL) * 100}")
+    BUFF_PERSEN=$(awk "BEGIN {printf \"%.0f\", ($RAM_BUFF / $RAM_TOTAL) * 100}")
+
+    echo -e " ${BORDER_COLOR}▶ ${BOLD}DISK & MEMORY USAGE${NC}"
+    echo -e " ${BOLD}Disk Root (/)${NC} : $(print_bar $DISK_PCT) ${GRAY}($DISK_USED / $DISK_TOTAL)${NC}"
+    echo -e " ${BOLD}RAM Used${NC}      : $(print_bar $RAM_PERSEN) ${GRAY}(${RAM_USED}MB)${NC}"
+    echo -e " ${BOLD}RAM Buff/Cache${NC}: $(print_bar $BUFF_PERSEN) ${GRAY}(${RAM_BUFF}MB)${NC}"
+    echo -e " ${BOLD}RAM Free${NC}      : ${GREEN}${RAM_FREE}MB${NC}"
+    echo ""
+
+    # --- Top 5 CPU ---
+    echo -e " ${BORDER_COLOR}▶ ${BOLD}TOP 5 APPS (Highest CPU Usage)${NC}"
+    echo -e "${BORDER_COLOR} ┌─────────┬────────┬────────┬────────────────────────────┐${NC}"
+    echo -e "${BORDER_COLOR} │${NC} ${BOLD}PID${NC}     ${BORDER_COLOR}│${NC} ${BOLD}%CPU${NC}   ${BORDER_COLOR}│${NC} ${BOLD}%RAM${NC}   ${BORDER_COLOR}│${NC} ${BOLD}COMMAND${NC}                    ${BORDER_COLOR}│${NC}"
+    echo -e "${BORDER_COLOR} ├─────────┼────────┼────────┼────────────────────────────┤${NC}"
+    ps -eo pid,%cpu,%mem,comm --sort=-%cpu | head -n 6 | tail -n 5 | while read pid cpu mem cmd; do
+        printf "${BORDER_COLOR} │${NC} %-7s ${BORDER_COLOR}│${NC} %-6s ${BORDER_COLOR}│${NC} %-6s ${BORDER_COLOR}│${NC} %-26s ${BORDER_COLOR}│${NC}\n" "$pid" "$cpu" "$mem" "${cmd:0:26}"
+    done
+    echo -e "${BORDER_COLOR} └─────────┴────────┴────────┴────────────────────────────┘${NC}"
+    echo ""
+
+    # --- Top 5 RAM ---
+    echo -e " ${BORDER_COLOR}▶ ${BOLD}TOP 5 APPS (Highest RAM Usage)${NC}"
+    echo -e "${BORDER_COLOR} ┌─────────┬────────┬────────┬────────────────────────────┐${NC}"
+    echo -e "${BORDER_COLOR} │${NC} ${BOLD}PID${NC}     ${BORDER_COLOR}│${NC} ${BOLD}%RAM${NC}   ${BORDER_COLOR}│${NC} ${BOLD}%CPU${NC}   ${BORDER_COLOR}│${NC} ${BOLD}COMMAND${NC}                    ${BORDER_COLOR}│${NC}"
+    echo -e "${BORDER_COLOR} ├─────────┼────────┼────────┼────────────────────────────┤${NC}"
+    ps -eo pid,%mem,%cpu,comm --sort=-%mem | head -n 6 | tail -n 5 | while read pid mem cpu cmd; do
+        printf "${BORDER_COLOR} │${NC} %-7s ${BORDER_COLOR}│${NC} %-6s ${BORDER_COLOR}│${NC} %-6s ${BORDER_COLOR}│${NC} %-26s ${BORDER_COLOR}│${NC}\n" "$pid" "$mem" "$cpu" "${cmd:0:26}"
+    done
+    echo -e "${BORDER_COLOR} └─────────┴────────┴────────┴────────────────────────────┘${NC}"
+
+    back_to_menu
+}
+
+# ======================================================
+# FUNGSI MENU UTAMA
+# ======================================================
+function show_menu() {
+    clear
+    print_gradient "═════════════════════════════════════════════════════"
+    print_gradient "             VPS MONITORING MENU       "
+    print_gradient "      ══════════════════════════════════════"
+    echo -e " ${GREEN}[1]${NC} Cek System Performance & RAM"
+    echo -e " ${BLUE}[2]${NC} Cek Traffic / Penggunaan Kuota"
+    echo -e " ${YELLOW}[3]${NC} Cek Status Service (SSH, XRAY, dll)"
+    echo -e " ${RED}[4]${NC} Cek Speedtest Server"
+    echo -e " ${PURPLE}[5]${NC} Cek Health (Disk, Detail RAM, Top Apps)"
+    echo -e " ${CYAN}[6]${NC} Keluar"
+    print_gradient "═════════════════════════════════════════════════════"
+    echo -n -e "${BOLD}Pilih menu [1-6]: ${NC}"
+    read pilihan
+
+    case $pilihan in
+        1) cek_system ;;
+        2) cek_traffic ;;
+        3) cek_service_status ;;
+        4) cek_speedtest ;;
+        5) cek_health ;;
+        6) clear; exit 0 ;;
+        *) 
+            echo -e "${RED}Pilihan tidak valid!${NC}"
+            sleep 1
+            show_menu 
+            ;;
+    esac
+}
+
+# Eksekusi menu pertama kali saat script dijalankan
+show_menu

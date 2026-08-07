@@ -1,181 +1,264 @@
 #!/bin/bash
-ISP=$(cat /etc/xray/isp)
-CITY=$(cat /etc/xray/city)
-domain=$(cat /etc/xray/domain)
-
-ungu="\033[0;35m"
-bc="\033[5;36m"
-y="\033[0;33m"
-NC="\033[0m"
-
-# // Izin IP
-url_izin="https://raw.githubusercontent.com/mastoni17/ijin/refs/heads/main/regmas"
-ipsaya=$(curl -sS ipv4.icanhazip.com)
-data_server=$(curl -v --insecure --silent https://google.com/ 2>&1 | grep Date | sed -e 's/< Date: //')
-date_list=$(date +"%Y-%m-%d" -d "$data_server")
-checking_sc() {
-  useexp=$(wget -qO- $url_izin | grep $ipsaya | awk '{print $3}')
-  if [[ $date_list < $useexp ]]; then
-    echo -ne
-  else
-    echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
-    echo -e "\033[42m          404 NOT FOUND AUTOSCRIPT          \033[0m"
-    echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
-    echo -e ""
-    echo -e "            ${RED}PERMISSION DENIED !${NC}"
-    echo -e "   \033[0;33mYour VPS${NC} $ipsaya \033[0;33mHas been Banned${NC}"
-    echo -e "     \033[0;33mBuy access permissions for scripts${NC}"
-    echo -e "             \033[0;33mContact Admin :${NC}"
-    echo -e "      \033[0;36mTelegram${NC} https://t.me/MastoniOrderBot"
-    echo -e "\033[1;93m────────────────────────────────────────────\033[0m"
-    exit
-  fi
-}
-checking_sc
-
-function garis() {
-echo -e "${y} ────────────────────────────────────────────${NC}"
-}
-
-function Credit_Sc() {
-sleep 1
-echo -e ""
-garis 
-echo -e "${ungu}      Terimakasih sudah menggunakan-"
-echo -e "        Script premium byMastoni Center"
-garis
-echo -e ""
-exit 0
-}
-
-function LOGO() {
-clear
-echo -e ""
-garis
-echo -e "${ungu}           Mastoni Store TUNNELING            "
-garis
-echo -e ""
-}
-
-clear
-garis
-echo -e "${ungu}         CREATE SSH/OVPN ACCOUNT         ${NC}"
-garis
-echo -e "${ungu} Input Number for expired${NC}"
-echo -e ""
-echo -e "${ungu} Example: 1 for 1 minutes${NC}"
-echo -e ""
-read -p " Sett Expired [minutes]: " timer
-
-user=Trial`</dev/urandom tr -dc 0-9 | head -c5`
-masaaktif=1
-Pass=1
-
-tgl=$(date -d "$masaaktif days" +"%d")
-bln=$(date -d "$masaaktif days" +"%b")
-thn=$(date -d "$masaaktif days" +"%Y")
-expe="$tgl $bln, $thn"
-tgl2=$(date +"%d")
-bln2=$(date +"%b")
-thn2=$(date +"%Y")
-tnggl="$tgl2 $bln2, $thn2"
-useradd -e `date -d "$masaaktif days" +"%Y-%m-%d"` -s /bin/false -M $user
-expi="$(chage -l $user | grep "Account expires" | awk -F": " '{print $2}')"
-echo -e "$Pass\n$Pass\n"|passwd $user &> /dev/null
-hariini=`date -d "0 days" +"%Y-%m-%d"`
-expi=`date -d "$masaaktif days" +"%Y-%m-%d"`
-
-DATADB=$(cat /etc/ssh/.ssh.db | grep "^#ssh#" | grep -w "${user}" | awk '{print $2}')
-if [[ "${DATADB}" != '' ]]; then
-  sed -i "/\b${user}\b/d" /etc/ssh/.ssh.db
+if ! command -v jq &> /dev/null; then
+    echo "Installing JQ..."
+    apt-get install jq -y > /dev/null 2>&1
 fi
-echo "#ssh# ${user} ${Pass} ${expe}" >>/etc/ssh/.ssh.db
+ZIVPN_CONFIG="/etc/zivpn/config.json"
+ZIVPN_DB="/etc/zivpn/user-db.json"
+SERVICE_NAME="zivpn.service"
+LOG_FILE="/etc/user-create/user.log"
+NC='\e[0m'
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+ORANGE='\033[0;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+LIGHT='\033[0;37m'
+BOLD='\033[1m'
+YELLOW='\033[1;93m'
+MYIP=$(curl -sS ipv4.icanhazip.com)
+ISP=$(cat /root/.info/.isp 2>/dev/null || echo "Unknown ISP")
+CITY=$(cat /root/.info/.city 2>/dev/null || echo "Unknown City")
+domain=$(cat /etc/xray/domain 2>/dev/null || echo "domain.com")
+PUB=$(cat /etc/slowdns/server.pub 2>/dev/null || echo "key-not-found")
+NS=$(cat /etc/xray/dns 2>/dev/null || echo "ns-not-found")
+CHATID=$(grep -E "^#bot# " "/etc/bot/.bot.db" 2>/dev/null | cut -d ' ' -f 3)
+KEY=$(grep -E "^#bot# " "/etc/bot/.bot.db" 2>/dev/null | cut -d ' ' -f 2)
+URL="https://api.telegram.org/bot$KEY/sendMessage"
+if [[ -f "$ZIVPN_CONFIG" ]]; then
+    UDP_ZIVPN=$(grep -o '"listen": *"[^"]*"' $ZIVPN_CONFIG | cut -d'"' -f4 | sed 's/://g' | sed 's/0.0.0.0//g')
+else
+    UDP_ZIVPN="5667"
+fi
+[ -z "$UDP_ZIVPN" ] && UDP_ZIVPN="5667"
 clear
+echo -e "${YELLOW}☉————————————————————————☉${NC}"
+echo -e "${BOLD}  CREATE TRIAL SSH & ZIVPN${NC}"
+echo -e "${YELLOW}☉————————————————————————☉${NC}"
+echo -e " Input Number for expired (Minutes)"
+echo -e " Example: 60 for 1 hour"
+echo -e ""
 
-cat > /var/www/html/ssh-$user.txt <<-END
-───────────────────
-Format SSH OVPN Account
-───────────────────
-Username         : $user
-Password         : $Pass
-───────────────────
-IP               : $IP
-Host             : $domain
-Port OpenSSH     : 22
-Port Dropbear    : 143, 109
-Port Dropbear WS : 443, 109
-Port SSH UDP     : 1-65535
-Port SSL/TLS     : 400-900
-Port OVPN WS SSL : 443
-Port OVPN SSL    : 443
-Port OVPN TCP    : 1194
-Port OVPN UDP    : 2200
-BadVPN UDP       : 7100, 7300, 7300
-Port SSH WS      : 80, 8080, 8880, 2052, 2082, 2086
-Port SSH WS SSL  : 443, 8443, 2053, 2083
-───────────────────
-Active During    : $masaaktif Hari
-Created          : $tnggl
-Expired          : $expe
-───────────────────
-Payload Websocket NTLS: 
-GET / HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf]
-───────────────────
-Payload Websocket TLS: 
-GET wss://bug.com/ HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf]
-───────────────────
-Payload Enhanced:
-PATCH / HTTP/1.1[crlf]Host: [host][crlf]Host: bug.com[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]
-───────────────────
-OVPN Download : https://$domain:81/
-───────────────────
+while true; do
+    echo -ne " ${GREEN}Sett Expired [minutes] : ${NC}"
+    read timer
+    if [[ "$timer" =~ ^[0-9]+$ ]]; then
+        break
+    else
+        echo -e " ${RED}[!] Error: Input must be a number!${NC}"
+    fi
+done
 
-END
+# --- GENERATE USER & PASS ---
+Login=Trial`</dev/urandom tr -dc 0-9 | head -c4`
+Pass=1
+iplimit=1
+Quota=1
+Quota_Show="1 GB"
 
-cat> /etc/cron.d/trialssh-${user} << END
+# --- 1. PROSES SYSTEM & SSH ---
+useradd -e `date -d "1 days" +"%Y-%m-%d"` -s /bin/false -m $Login
+echo -e "$Pass\n$Pass\n"|passwd $Login &> /dev/null
+
+# Limit IP SSH
+mkdir -p /etc/kyt/limit/ssh/ip
+echo -e "$iplimit" > /etc/kyt/limit/ssh/ip/$Login
+
+# Quota SSH
+if [ -z ${Quota} ]; then Quota="0"; fi
+c=$(echo "${Quota}" | sed 's/[^0-9]*//g')
+d=$((${c} * 1024 * 1024 * 1024))
+if [[ ${c} != "0" ]]; then
+    if [ ! -d /etc/ssh ]; then mkdir -p /etc/ssh; fi
+    echo "${d}" >/etc/ssh/${Login}
+fi
+
+# Database SSH 
+expe=$(date -d "+${timer} minutes" +"%H:%M, %d-%b-%Y")
+tnggl=$(date +"%d %b, %Y")
+exp_date_iso=$(date -d "1 days" +"%Y-%m-%d")
+
+if [ -f /etc/ssh/.ssh.db ]; then
+    sed -i "/\b${Login}\b/d" /etc/ssh/.ssh.db
+fi
+echo "#ssh# ${Login} ${Pass} ${Quota} ${iplimit} ${expe}" >>/etc/ssh/.ssh.db
+
+# --- 2. PENJADWALAN HAPUS TRIAL (HYBRID: TMUX + CRON) ---
+
+# Instal tmux jika belum ada
+if ! command -v tmux &> /dev/null; then apt-get install tmux -y >/dev/null 2>&1; fi
+
+# Limit Device
+echo "${Login} hard maxlogins ${iplimit}" >> /etc/security/limits.conf
+
+# A. Jebakan Utama: Tmux untuk real-time kill
+sleep_time=$((${timer} * 60))
+tmux new-session -d -s "TRIAL-${Login}" "sleep ${sleep_time} && /usr/local/sbin/hapus-trial.sh ${Login}"
+
+# B. Penjaga Gawang: Cronjob (Jaga-jaga jika VPS reboot / Tmux Crash)
+EXP_MIN=$(date -d "+${timer} minutes" +"%M")
+EXP_HOR=$(date -d "+${timer} minutes" +"%H")
+EXP_DOM=$(date -d "+${timer} minutes" +"%d")
+EXP_MON=$(date -d "+${timer} minutes" +"%m")
+
+cat> /etc/cron.d/trialssh-${Login} << END
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-*/${timer} * * * * root /usr/local/sbin/z9dtrial ssh ${user} ${timer}
+${EXP_MIN} ${EXP_HOR} ${EXP_DOM} ${EXP_MON} * root /usr/local/sbin/hapus-trial.sh ${Login}
+END
+service cron reload >/dev/null 2>&1
+
+# --- 3. INTEGRASI ZIVPN ---
+if [[ -f "$ZIVPN_CONFIG" ]]; then
+    cp "$ZIVPN_CONFIG" "${ZIVPN_CONFIG}.bak"
+    if ! jq -e ".auth.config | index(\"$Login\")" "$ZIVPN_CONFIG" > /dev/null; then
+          jq --arg user "$Login" '.auth.config += [$user]' "$ZIVPN_CONFIG" > "${ZIVPN_CONFIG}.tmp" && mv "${ZIVPN_CONFIG}.tmp" "$ZIVPN_CONFIG"
+    fi
+    if [ ! -f "$ZIVPN_DB" ]; then echo "{}" > "$ZIVPN_DB"; fi
+    jq --arg u "$Login" --arg e "$exp_date_iso" --arg q "$Quota_Show" --arg i "$iplimit" \
+        '.[$u] = {exp: $e, quota: $q, ip: $i}' "$ZIVPN_DB" > "${ZIVPN_DB}.tmp" && mv "${ZIVPN_DB}.tmp" "$ZIVPN_DB"
+    systemctl restart "$SERVICE_NAME"
+fi
+
+# --- 4. OUTPUT FILE (HTML) ---
+cat > /var/www/html/ssh-$Login.txt <<-END
+◇━━━━━━━━━━━━━━━━━◇
+Format Trial SSH & ZIVPN
+◇━━━━━━━━━━━━━━━━━◇
+Username         : $Login
+Password         : $Pass
+ZIVPN Token      : $Login
+◇━━━━━━━━━━━━━━━━━◇
+IP               : $MYIP
+Host             : $domain
+Port OpenSSH     : 443, 80, 22
+Port Dropbear    : 443, 109
+Port SSH WS      : 80, 8080
+Port SSH SSL WS  : 443
+Port ZIVPN UDP   : $UDP_ZIVPN (All Port)
+◇━━━━━━━━━━━━━━━━━◇
+Aktif Selama     : $timer Menit (TRIAL)
+Dibuat Pada      : $tnggl
+Berakhir Pada    : $expe
+◇━━━━━━━━━━━━━━━━━◇
+Payload WSS: GET wss://BUG.COM/ HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf] 
+◇━━━━━━━━━━━━━━━━━◇
+OVPN Download : https://$domain:81/
+◇━━━━━━━━━━━━━━━━━◇
 END
 
-echo -e " Creating user...."
-echo -ne "Please wait... "
-load
+# --- 5. OUTPUT TELEGRAM (FULL STYLE) ---
+TEXT="
+<code>☉——————————————————————————☉</code>
+<code>☘️Success Trial SSH & ZIVPN☘️</code>
+<code>☉——————————————————————————☉</code>
+<code>Username         : </code> <code>$Login</code>
+<code>Password         : </code> <code>$Pass</code>
+<code>ZIVPN Token      : </code> <code>$Login</code>
+<code>Limit Ip         : </code> <code>$iplimit</code>
+<code>☉——————————————————————————☉</code>
+<code>Host             : </code> <code>$domain</code>
+<code>Limit Quota      : </code> <code>$Quota_Show</code>
+<code>Host Slowdns     : </code> <code>$NS</code>
+<code>IP               : $MYIP</code>
+<code>ISP              : $ISP</code>
+<code>CITY             : $CITY</code>
+<code>Port OpenSSH     : 443, 80, 22</code>
+<code>Port Dropbear    : 443, 109</code>
+<code>Port SSH WS      : 80, 8080, 8081-9999 </code>
+<code>Port SSH UDP     : 1-65535 </code>
+<code>Port ZIVPN UDP   : $UDP_ZIVPN </code>
+<code>Port SSH SSL WS  : 443</code>
+<code>Port SSL/TLS     : 400-900</code>
+<code>Port OVPN WS SSL : 443</code>
+<code>Port OVPN SSL    : 443</code>
+<code>Port OVPN TCP    : 443, 1194</code>
+<code>Port OVPN UDP    : 2200</code>
+<code>BadVPN UDP       : 7100, 7300, 7300</code>
+<code>Pub Key          : </code> <code>$PUB</code>
+<code>☉——————————————————————————☉</code>
+<code>SSH WS       : </code>
+<code>$domain:80@${Login}:${Pass}</code>
+<code>SSH SSL      : </code>
+<code>$domain:443@${Login}:${Pass}</code>
+<code>◇━━━━━━━━━━━━━━━━━◇</code>
+<code>SSH UDP          : </code><code>$domain:1-65535@$Login:$Pass</code>
+<code>◇━━━━━━━━━━━━━━━━━◇</code>
+<code>SSH ZIVPN         </code>
+<code>UDP SERVER       : </code><code>$domain</code>
+<code>UDP PASSWORD     : </code><code>$Login</code>
+<code>◇━━━━━━━━━━━━━━━━━◇</code>
+<code>☉——————————————————————————☉</code>
+<code>🧿Payload WS        : 🧿</code><code>GET / HTTP/1.1[crlf]host: $domain[crlf]Upgrade: Websocket[crlf][crlf]</code>
+<code>☉——————————————————————————☉</code>
+<code>🧿Payload WSS       : 🧿</code><code>GET wss://BUG.COM/ HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf]</code>
+<code>☉——————————————————————————☉</code>
+<code>🧿Payload Enhanced : 🧿</code><code>PATCH / HTTP/1.1[crlf]Host: $domain[crlf]Host: bug.com[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]</code>
+<code>☉——————————————————————————☉</code>
+OVPN Download : https://$domain:81/
+<code>☉——————————————————————————☉</code>
+<code>Save Link Account: </code>https://$domain:81/ssh-$Login.txt
+<code>☉——————————————————————————☉</code>
+Aktif Selama        : $timer Menit (Trial)
+Dibuat Pada          : $tnggl
+Berakhir Pada        : $expe
+<code>☉——————————————————————————☉</code>
+"
+curl -s --max-time 10 -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
+
+# --- 6. OUTPUT TERMINAL (FULL PREMIUM STYLE + LOGGING) ---
+# Memastikan direktori log ada
+mkdir -p /etc/user-create
 
 clear
-garis
-echo -e " ${ungu}           SSH/OVPN ACCOUNT             ${NC}"
-garis
-echo -e " Username         : $user "
-echo -e " Password         : $Pass "
-garis
-echo -e " Host/IP          : $domain"
-echo -e " Port OpenSSH     : 22"
-echo -e " Port SSH UDP     : 1-65535"
-echo -e " Port Dropbear    : 143, 109"
-echo -e " Port SSL/TLS     : 443"
-echo -e " Port OVPN WS SSL : 443"
-echo -e " Port OVPN SSL    : 443"
-echo -e " Port OVPN TCP    : 443, 1194"
-echo -e " Port OVPN UDP    : 2200"
-echo -e " BadVPN           : 7100 - 7500"
-echo -e " Port SSH NTLS    : 80, 8080, 8880, 2052, 2082"
-echo -e " Port SSH TLS     : 443, 8443, 2053"
-garis
-echo -e " OVPN Download    : https://$domain:81/"
-garis
-echo -e " Save Link Account: https://$domain:81/ssh-$user.txt"
-garis
-echo -e " Payload WS NTLS  :"
-echo -e " GET / HTTP/1.1[crlf]host: ${domain}[crlf]Upgrade: Websocket[crlf][crlf]"
-garis
-echo -e " Payload WS TLS   :"
-echo -e " GET http://bug.con/ HTTP/1.1[crlf]host: ${domain}[crlf]Upgrade: Websocket[crlf][crlf]"
-garis
-echo -e " Payload ENHANCED :"
-echo -e " PATCH / HTTP/1.1[crlf]Host: ${domain}[crlf]Host: bug.com[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]" 
-garis
-#echo -e " Created On       : $hariini"
-echo -e " Expired On       : $timer Minutes"
-garis
-Credit_Sc
+echo ""
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "${CYAN}          SUCCESS TRIAL SSH & ZIVPN              ${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} User Information${NC}" | tee -a $LOG_FILE
+echo -e "  ● Username      : ${LIGHT}$Login${NC}" | tee -a $LOG_FILE
+echo -e "  ● Password      : ${LIGHT}$Pass${NC}" | tee -a $LOG_FILE
+echo -e "  ● ZIVPN Token   : ${LIGHT}$Login${NC}" | tee -a $LOG_FILE
+echo -e "  ● Limit IP      : ${LIGHT}$iplimit Device${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} Server Information${NC}" | tee -a $LOG_FILE
+echo -e "  ● Domain        : ${LIGHT}$domain${NC}" | tee -a $LOG_FILE
+echo -e "  ● IP Address    : ${LIGHT}$MYIP${NC}" | tee -a $LOG_FILE
+echo -e "  ● Limit Quota   : ${LIGHT}$Quota_Show${NC}" | tee -a $LOG_FILE
+echo -e "  ● Host Slowdns  : ${LIGHT}$NS${NC}" | tee -a $LOG_FILE
+echo -e "  ● ISP           : ${LIGHT}$ISP${NC}" | tee -a $LOG_FILE
+echo -e "  ● Location      : ${LIGHT}$CITY${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} Port Information${NC}" | tee -a $LOG_FILE
+echo -e "  ● OpenSSH       : ${LIGHT}443, 80, 22${NC}" | tee -a $LOG_FILE
+echo -e "  ● Dropbear      : ${LIGHT}443, 109${NC}" | tee -a $LOG_FILE
+echo -e "  ● SSH WS        : ${LIGHT}80, 8080, 8880, 2082${NC}" | tee -a $LOG_FILE
+echo -e "  ● SSH SSL WS    : ${LIGHT}443${NC}" | tee -a $LOG_FILE
+echo -e "  ● SSH UDP       : ${LIGHT}1-65535${NC}" | tee -a $LOG_FILE
+echo -e "  ● ZIVPN UDP     : ${LIGHT}$UDP_ZIVPN${NC}" | tee -a $LOG_FILE
+echo -e "  ● OVPN SSL/TCP  : ${LIGHT}443, 1194${NC}" | tee -a $LOG_FILE
+echo -e "  ● OVPN UDP      : ${LIGHT}2200${NC}" | tee -a $LOG_FILE
+echo -e "  ● BadVPN UDP    : ${LIGHT}7100, 7300, 7300${NC}" | tee -a $LOG_FILE
+echo -e "  ● Pub Key       : ${LIGHT}${PUB}${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} Payload Websocket :${NC}" | tee -a $LOG_FILE
+echo -e "${LIGHT}GET / HTTP/1.1[crlf]host: $domain[crlf]Upgrade: Websocket[crlf][crlf]${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} Payload SSL / TLS :${NC}" | tee -a $LOG_FILE
+echo -e "${LIGHT}GET wss://BUG.COM/ HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf]${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} Payload Enhanced :${NC}" | tee -a $LOG_FILE
+echo -e "${LIGHT}PATCH / HTTP/1.1[crlf]Host: $domain[crlf]Host: bug.com[crlf]Upgrade: websocket[crlf]Connection: Upgrade[crlf][crlf]${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "  ● OVPN Download : ${BLUE}https://$domain:81/${NC}" | tee -a $LOG_FILE
+echo -e "  ● Save Link     : ${BLUE}https://$domain:81/ssh-$Login.txt${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} Active For      : ${LIGHT}$timer Menit (Trial)${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} Created On      : ${LIGHT}$tnggl${NC}" | tee -a $LOG_FILE
+echo -e "${GREEN} Expires On      : ${LIGHT}$expe${NC}" | tee -a $LOG_FILE
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}" | tee -a $LOG_FILE
+echo -e "\033[5m\033[35mTERIMAKASIH \033[34mSUDAH BERBELANJA \033[31mDI MASTONI GANTENG\033[0m" | tee -a $LOG_FILE
+echo ""
+read -n 1 -s -r -p "Press any key to back to menu..."
+menu

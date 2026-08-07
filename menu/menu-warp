@@ -1,0 +1,113 @@
+#!/bin/bash
+# =========================================================
+# MASTONI GANTENG STORE - WARP PROXY AUTO INSTALLER
+# =========================================================
+
+# --- Warna & Gaya ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+# Pastikan lolcat terinstal untuk tampilan premium
+if ! command -v lolcat &> /dev/null; then
+    echo -e "${YELLOW}[INFO] Menginstal dependensi visual (lolcat)...${NC}"
+    apt-get install lolcat -y > /dev/null 2>&1
+fi
+
+clear
+echo "==================================================" | lolcat
+echo "               MASTONI GANTENG STORE                " | lolcat
+echo "             WARP SOCKS5 PROXY MENU               " | lolcat
+echo "==================================================" | lolcat
+echo ""
+
+install_warp() {
+    echo -e "${CYAN}[INFO]${NC} Menyiapkan repositori dan instalasi Cloudflare WARP..."
+    apt-get update -y
+    apt-get install -y curl gnupg lsb-release
+
+    # Menambahkan GPG Key & Repo Cloudflare
+    curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | gpg --yes --dearmor --output /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+    echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/cloudflare-client.list > /dev/null
+
+    apt-get update -y
+    apt-get install cloudflare-warp -y
+
+    echo -e "${CYAN}[INFO]${NC} Mengonfigurasi WARP ke Mode Proxy (SOCKS5 Port 40000)..."
+    
+    # Registrasi device baru (bypass TOS prompt)
+    warp-cli --accept-tos registration new
+    
+    # Set mode ke proxy
+    warp-cli --accept-tos mode proxy
+    
+    # Ubah port proxy sesuai script bot (40000)
+    warp-cli --accept-tos proxy port 40000
+    
+    # Koneksikan
+    warp-cli --accept-tos connect
+    
+    echo -e "${GREEN}[SUCCESS]${NC} WARP berhasil diinstal dan berjalan di 127.0.0.1:40000"
+    sleep 2
+}
+
+restart_warp() {
+    echo -e "${YELLOW}[INFO]${NC} Merestart koneksi Cloudflare WARP..."
+    warp-cli --accept-tos disconnect
+    sleep 1
+    warp-cli --accept-tos connect
+    echo -e "${GREEN}[SUCCESS]${NC} WARP berhasil direstart dan dikoneksikan ulang!"
+    sleep 2
+}
+
+uninstall_warp() {
+    echo -e "${YELLOW}[INFO]${NC} Memutuskan koneksi dan menghapus Cloudflare WARP..."
+    warp-cli --accept-tos disconnect
+    apt-get remove --auto-remove cloudflare-warp -y
+    rm -f /etc/apt/sources.list.d/cloudflare-client.list
+    echo -e "${GREEN}[SUCCESS]${NC} WARP berhasil dihapus dari sistem!"
+    sleep 2
+}
+
+check_status() {
+    echo "==================================================" | lolcat
+    echo -e "${CYAN}[STATUS CLOUDFLARE WARP]${NC}"
+    warp-cli --accept-tos status
+    echo ""
+    echo -e "${CYAN}[TEST KONEKSI SOCKS5 40000]${NC}"
+    # Uji IP via proxy localhost
+    PROXY_IP=$(curl -s -x socks5h://127.0.0.1:40000 https://api.ipify.org)
+    if [ -z "$PROXY_IP" ]; then
+        echo -e "${RED}Gagal terhubung ke Proxy! Pastikan WARP Connected.${NC}"
+    else
+        echo -e "IP Proxy Aktif: ${GREEN}$PROXY_IP${NC}"
+    fi
+    echo "==================================================" | lolcat
+    echo ""
+    read -n 1 -s -r -p "Tekan tombol apa saja untuk kembali..."
+}
+
+while true; do
+    clear
+    echo "==================================================" | lolcat
+    echo "             MENU WARP (SOCKS5 PROXY)             " | lolcat
+    echo "==================================================" | lolcat
+    echo -e "  [1] Install & Aktifkan WARP (Port 40000)"
+    echo -e "  [2] Cek Status & Test IP Proxy"
+    echo -e "  [3] Restart WARP"
+    echo -e "  [4] Hapus WARP"
+    echo -e "  [5] Keluar"
+    echo "==================================================" | lolcat
+    read -p "Pilih menu [1-5]: " option
+
+    case $option in
+        1) install_warp ;;
+        2) check_status ;;
+        3) restart_warp ;;
+        4) uninstall_warp ;;
+        5) clear; exit 0 ;;
+        *) echo -e "${RED}[ERROR] Pilihan tidak valid!${NC}"; sleep 1 ;;
+    esac
+done

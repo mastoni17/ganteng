@@ -1,52 +1,256 @@
 #!/bin/bash
 # ==========================================
-# Color
+# Enhanced SSH Auto-Delete: Shadow + .ssh.db
+# Notifikasi Telegram Premium + Tombol Start
+# Anti-Hang & Perbaikan Parsing Tanggal
+# ==========================================
 RED='\033[0;31m'
-NC='\033[0m'
 GREEN='\033[0;32m'
 ORANGE='\033[0;33m'
 BLUE='\033[0;34m'
 PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
 LIGHT='\033[0;37m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+# 1. LOAD TELEGRAM DATA
+if [ -f /usr/bin/kyt/var.txt ]; then
+    source /usr/bin/kyt/var.txt
+else
+    echo -e "${RED}Error: File /usr/bin/kyt/var.txt tidak ditemukan.${NC}"
+    exit 1
+fi
+
+# Ambil username bot otomatis jika belum diset
+if [[ -z "$BOT_USERNAME" ]]; then
+    BOT_USERNAME=$(curl -s --max-time 5 "https://api.telegram.org/bot${BOT_TOKEN}/getMe" | jq -r '.result.username')
+    if [[ "$BOT_USERNAME" == "null" || -z "$BOT_USERNAME" ]]; then
+        echo -e "${RED}Error: Tidak bisa mendapatkan username bot. Periksa BOT_TOKEN.${NC}"
+        exit 1
+    fi
+fi
+
+# Fungsi kirim tanpa tombol (async + timeout)
+send_telegram() {
+    local message="$1"
+    curl -s --max-time 5 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+        -d chat_id="${ADMIN}" \
+        --data-urlencode text="${message}" \
+        -d parse_mode="html" \
+        > /dev/null 2>&1 &
+}
+
+# Fungsi kirim dengan tombol Start (async + timeout)
+send_telegram_with_button() {
+    local message="$1"
+    local keyboard='{"inline_keyboard":[[{"text":"♻️ Start Bot","url":"https://t.me/'"${BOT_USERNAME}"'?start=start"}]]}'
+    curl -s --max-time 5 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+        -d chat_id="${ADMIN}" \
+        --data-urlencode text="${message}" \
+        -d parse_mode="html" \
+        --data-urlencode reply_markup="${keyboard}" \
+        > /dev/null 2>&1 &
+}
+
+BACKUP_FILE="/etc/ssh_backup"
+DB_FILE="/etc/ssh/.ssh.db"
+[[ ! -f "$BACKUP_FILE" ]] && touch "$BACKUP_FILE"
+
+hariini=$(date +%d-%m-%Y)
+todaystime=$(date +%s)
+
+declare -A expired_map
+declare -A expired_source
+
+# ==========================================
+# 2. SCAN /etc/shadow (akun sistem)
+# ==========================================
+while IFS=: read -r username userexp; do
+    [[ -z "$userexp" || "$userexp" == "" ]] && continue
+    exp_seconds=$((userexp * 86400))
+    if [ $exp_seconds -le $todaystime ]; then
+        exp_date_formatted=$(date -d "@$exp_seconds" +"%d %b %Y")
+        expired_map["$username"]="$exp_date_formatted"
+        expired_source["$username"]="System"
+    fi
+done < <(cat /etc/shadow | cut -d: -f1,8 | sed '/:$/d')
+
+# ==========================================
+# 3. SCAN /etc/ssh/.ssh.db (akun DB)
+# ==========================================
+if [[ -f "$DB_FILE" ]]; then
+    while read -r tag db_user pass quota limit exp_day exp_month exp_year; do
+        [[ "$tag" != "#ssh#" ]] && continue
+        [[ -z "$db_user" ]] && continue
+
+        exp_epoch_db=""
+        exp_date_clean="Unknown"
+
+        # --- Parsing format normal: DD Mon YYYY ---
+        if [[ -n "$exp_day" && -n "$exp_month" && -n "$exp_year" ]]; then
+            exp_month_clean="${exp_month%,}"
+            exp_str="$exp_day $exp_month_clean $exp_year"
+            exp_epoch_db=$(date -d "$exp_str" +%s 2>/dev/null)
+            if [[ -n "$exp_epoch_db" ]]; then
+                exp_date_clean=$(date -d "@$exp_epoch_db" +"%d %b %Y")
+            fi
+        fi
+
+        # --- Parsing alternatif jika gagal: exp_month = DD-Mon ---
+        if [[ -z "$exp_epoch_db" && "$exp_month" =~ ^([0-9]{1,2})-([A-Za-z]{2,3})$ ]]; then
+            day="${BASH_REMATCH[1]}"
+            month_abbr="${BASH_REMATCH[2]}"
+            case "${month_abbr,,}" in
+                ja|jan) month_abbr="Jan" ;;
+                fe|feb) month_abbr="Feb" ;;
+                ma|mar) month_abbr="Mar" ;;
+                ap|apr) month_abbr="Apr" ;;
+                me|may) month_abbr="May" ;;
+                ju|jun) month_abbr="Jun" ;;
+                jul) month_abbr="Jul" ;;
+                ag|aug) month_abbr="Aug" ;;
+                se|sep) month_abbr="Sep" ;;
+                ok|oct) month_abbr="Oct" ;;
+                no|nov) month_abbr="Nov" ;;
+                de|dec) month_abbr="Dec" ;;
+                *) month_abbr="${month_abbr^}" ;;
+            esac
+            year="${exp_year:-2026}"
+            exp_str="$day $month_abbr $year"
+            exp_epoch_db=$(date -d "$exp_str" +%s 2>/dev/null)
+            if [[ -n "$exp_epoch_db" ]]; then
+                exp_date_clean=$(date -d "@$exp_epoch_db" +"%d %b %Y")
+            fi
+        fi
+
+        # --- Fallback ---
+        if [[ -z "$exp_epoch_db" ]]; then
+            exp_epoch_db=0
+            exp_date_clean="Unknown"
+        fi
+
+        if [ $exp_epoch_db -le $todaystime ]; then
+            if [[ -z "${expired_map[$db_user]}" ]]; then
+                expired_map["$db_user"]="$exp_date_clean"
+                expired_source["$db_user"]="DB"
+            fi
+        fi
+    done < "$DB_FILE"
+fi
+
+if [ ${#expired_map[@]} -eq 0 ]; then
+    echo -e "${GREEN}✅ Tidak ada user expired.${NC}"
+    exit 0
+fi
+
+# ==========================================
+# 4. NOTIFIKASI SEBELUM PENGHAPUSAN (PREMIUM)
+# ==========================================
+# Menggunakan literal newline daripada %0A
+list_pesan_bot=""
+for user in "${!expired_map[@]}"; do
+    exp_date="${expired_map[$user]}"
+    src="${expired_source[$user]}"
+    if [[ "$src" == "DB" ]]; then
+        src_icon="📁"
+    else
+        src_icon="🔐"
+    fi
+    list_pesan_bot+=" ├─ 👤 <code>${user}</code> <i>(${exp_date})</i> ${src_icon}
+"
+done
+
+pesan_sebelum="╭━━━━━━━◈◆◈━━━━━━━╮
+   <b>🔔 NOTIFIKASI PENGHAPUSAN</b>
+╰━━━━━━━◈◆◈━━━━━━━╯
+
+<b>📛 Ditemukan ${#expired_map[@]} user SSH expired:</b>
+╭───────────────────
+${list_pesan_bot}╰───────────────────
+
+⏳ <i>Proses Backup & Delete sedang berjalan...</i>"
+
+send_telegram_with_button "$pesan_sebelum"
+
+# ==========================================
+# 5. PROSES BACKUP & DELETE
 # ==========================================
 clear
-               hariini=`date +%d-%m-%Y`
-               echo "Thank you for removing the EXPIRED USERS"
-               echo "--------------------------------------"
-               cat /etc/shadow | cut -d: -f1,8 | sed /:$/d > /tmp/expirelist.txt
-               totalaccounts=`cat /tmp/expirelist.txt | wc -l`
-               for((i=1; i<=$totalaccounts; i++))
-               do
-               tuserval=`head -n $i /tmp/expirelist.txt | tail -n 1`
-               username=`echo $tuserval | cut -f1 -d:`
-               userexp=`echo $tuserval | cut -f2 -d:`
-               userexpireinseconds=$((userexp * 86400))
-               tglexp=`date -d @$userexpireinseconds`             
-               tgl=`echo $tglexp |awk -F" " '{print $3}'`
-               while [ ${#tgl} -lt 2 ]
-               do
-               tgl="0"$tgl
-               done
-               while [ ${#username} -lt 15 ]
-               do
-               username=$username" " 
-               done
-               bulantahun=`echo $tglexp |awk -F" " '{print $2,$6}'`
-               echo "echo "Expired- User : $username Expire at : $tgl $bulantahun"" >> /usr/local/bin/alluser
-               todaystime=`date +%s`
-               if [ $userexpireinseconds -ge $todaystime ] ;
-               then
-		    	:
-               else
-               echo "echo "Expired- Username : $username are expired at: $tgl $bulantahun and removed : $hariini "" >> /usr/local/bin/deleteduser
-	           echo "Username $username that are expired at $tgl $bulantahun removed from the VPS $hariini"
-               userdel $username
-               fi
-               done
-               echo " "
-               echo "--------------------------------------"
-               echo "Script are successfully run"
-echo -e "back to menu on 2 second"
-sleep 2
-menu               
+echo -e "\n${BOLD}${PURPLE}═══════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${CYAN}   🗑️  PENGHAPUSAN USER EXPIRED (SHADOW + DB)  ${NC}"
+echo -e "${BOLD}${PURPLE}═══════════════════════════════════════════════${NC}"
+echo -e "${LIGHT}Tanggal   : ${hariini}${NC}"
+echo -e "${LIGHT}Total Exp : ${#expired_map[@]}${NC}"
+echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+list_terhapus=""
+
+for user in "${!expired_map[@]}"; do
+    exp_date="${expired_map[$user]}"
+    src="${expired_source[$user]}"
+
+    pass_hash=$(grep -w "^$user" /etc/shadow 2>/dev/null | cut -d: -f2)
+    if [[ -n "$pass_hash" ]]; then
+        if ! grep -q "^$user:" "$BACKUP_FILE"; then
+            echo "$user:$pass_hash" >> "$BACKUP_FILE"
+            echo -e "${CYAN}💾 [BACKUP]  ${BOLD}$user${NC}${CYAN} hash tersimpan.${NC}"
+        fi
+    fi
+
+    if id "$user" &>/dev/null; then
+        userdel --force "$user" &>/dev/null
+        rm -rf /home/$user &>/dev/null
+        echo -e "${RED}🗑️  [DELETE]  ${BOLD}$user${NC}${RED} (Exp: $exp_date) dari sistem.${NC}"
+    else
+        echo -e "${ORANGE}⚠️  [SKIP]    ${BOLD}$user${NC} tidak ada di sistem, bersihkan DB saja.${NC}"
+    fi
+
+    if grep -q "^#ssh# $user " "$DB_FILE"; then
+        sed -i "/^#ssh# $user\b/d" "$DB_FILE"
+        echo -e "${BLUE}🗃️  [DB]      Entry $user dihapus dari $DB_FILE${NC}"
+    fi
+
+    [ -f "/etc/cron.d/trialssh-$user" ] && rm -f "/etc/cron.d/trialssh-$user" && service cron reload > /dev/null 2>&1
+    rm -f "/var/www/html/ssh-$user.txt" 2>/dev/null
+    rm -f "/etc/kyt/limit/ssh/ip/$user" 2>/dev/null
+    rm -f "/etc/ssh/usage_db/$user.total" 2>/dev/null
+    rm -f "/etc/ssh/usage_db/$user.last" 2>/dev/null
+
+    echo "Expired- Username : $user - Exp: $exp_date - Sumber: $src - Dihapus: $hariini" >> /usr/local/bin/deleteduser
+
+    # Menggunakan literal newline
+    list_terhapus+=" ├─ ✅ <code>${user}</code> <i>(${exp_date})</i>
+"
+done
+
+echo -e "${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GREEN}✅ Semua user expired telah diproses.${NC}"
+
+# ==========================================
+# 6. NOTIFIKASI SETELAH PENGHAPUSAN
+# ==========================================
+# (Hapus blok notifikasi kedua yang bentrok)
+
+waktu=$(date +'%d %b %Y, %H:%M WIB')
+
+pesan_sesudah="╭━━━━━━━◈◆◈━━━━━━━╮
+   ♻️ <b>𝗔𝗨𝗧𝗢-𝗖𝗟𝗘𝗔𝗡𝗨𝗣 𝗦𝗦𝗛</b> ♻️
+╰━━━━━━━◈◆◈━━━━━━━╯
+
+📊 <b>Status:</b> Selesai
+🗑️ <b>Total Dihapus:</b> ${#expired_map[@]} Akun
+
+📋 <b>Detail Penghapusan:</b>
+╭───────────────────
+${list_terhapus}╰───────────────────
+
+<b>Keterangan Pembersihan:</b>
+ └ 🔒 <i>Hash password dibackup</i>
+ └ 📁 <i>Backup: /etc/ssh_backup</i>
+ └ 🗃️ <i>DB sync: /etc/ssh/.ssh.db</i>
+
+⚙️ <i>MASTONI GANTENG SYSTEM</i>
+🕒 <i>$waktu</i>"
+
+send_telegram_with_button "$pesan_sesudah"

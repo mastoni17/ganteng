@@ -1,6 +1,4 @@
 #!/bin/bash
-# Lt
-# ==========================================
 # Color
 RED='\033[0;31m'
 NC='\033[0m'
@@ -40,7 +38,6 @@ baris_panjang
 echo -e "\033[95;1m     $nama       \033[0m"
 baris_panjang
 }
-
 function baris_panjang() {
   echo -e "${BlueCyan} ———————————————————————————————————————${Xark}"
 }
@@ -67,7 +64,6 @@ loading() {
 
   printf "    \b\b\b\b"
 }
-
 clear
 echo -e "\033[5;36m┌──────────────────────────────────────────┐\033[0m"
 echo "   USERNAME       EXP DATE         STATUS"
@@ -110,8 +106,6 @@ PAYLOADTLS="GET wss://$domain/ HTTP/1.1[crlf]Host: [host][crlf]Connection: Upgra
 
 PAYLOADHANCED="HEAD / HTTP/1.1[crlf]Host: Masukan_Bug[crlf][crlf]PATCH / HTTP/1.1[crlf]Host: [host][crlf]Upgrade: websocket[crlf][crlf][split]HTTP/ 1[crlf][crlf]"
 
-
-
 function Send_Log() {
 CHATID="$CHATID"
 KEY="$KEY"
@@ -141,7 +135,12 @@ TEXT="
 <code>◇━━━━━━━━━━━━━━━━━◇</code>
 <code>SSH WEBSOCKET    : </code><code>$domain:80@$Login:$Pass</code>
 <code>SSH SSL          : </code><code>$domain:443@$Login:$Pass</code>
+<code>◇━━━━━━━━━━━━━━━━━◇</code>
 <code>SSH UDP          : </code><code>$domain:1-65535@$Login:$Pass</code>
+<code>◇━━━━━━━━━━━━━━━━━◇</code>
+<code>SSH ZIVPN         </code>
+<code>UDP SERVER       : </code><code>$domain</code>
+<code>UDP PASSWORD     : </code><code>$Login</code>
 <code>◇━━━━━━━━━━━━━━━━━◇</code>
 <code>Payload WSS      : </code><code>GET wss://BUG.COM/ HTTP/1.1[crlf]Host: $domain[crlf]Upgrade: websocket[crlf][crlf]</code>
 <code>◇━━━━━━━━━━━━━━━━━◇</code>
@@ -152,11 +151,9 @@ OVPN Download : https://$domain:81/
 Berakhir Pada        : $expe
 <code>◇━━━━━━━━━━━━━━━━━◇</code>
 "
-
 curl -s --max-time $TIME -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
 }
 
-# Details ACcount
 function Details_Ssh(){
 Lunatic_Banner
 echo -e "  \033[37;1;7mSSH OPENVPN\033[0m"
@@ -174,9 +171,6 @@ echo -e "\033[3;37m SSL/TLS     : 443 \033[0m"
 echo -e "\033[3;37m OVPN UDP    : 2200 \033[0m"
 baris_panjang
 }
-
-
-
 function Copy_Faste(){
 echo -e "\033[3;37m Port 80     : $domain:80@$Login:$Pass \033[0m"
 echo -e "\033[3;37m Port 443    : $domain:443@$Login:$Pass \033[0m"

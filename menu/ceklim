@@ -1,32 +1,123 @@
 #!/bin/bash
-# MASTONI
 # ==========================================
-# Color
-RED='\033[0;31m'
+#  MASTONI GANTENG: LIVE LIMIT CHECKER (PREMIUM)
+#  Fix: PS AX + Real-time PID Tracking
+# ==========================================
+
+# --- CONFIG COLORS ---
 NC='\033[0m'
+RED='\033[0;31m'
 GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
 CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-# ==========================================
+WHITE='\033[1;37m'
+YELLOW='\033[0;33m'
+BOLD='\033[1m'
+BORDER="${CYAN}"
+
+# --- FUNGSI GRADASI ---
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        r_start=255; g_start=215; b_start=0;
+        r_mid=0;     g_mid=128;   b_mid=255;
+        r_end=138;   g_end=43;    b_end=226;
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(r_start + (r_mid - r_start) * f);
+                g = int(g_start + (g_mid - g_start) * f);
+                b = int(b_start + (b_mid - b_start) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(r_mid + (r_end - r_mid) * f);
+                g = int(g_mid + (g_end - g_mid) * f);
+                b = int(b_mid + (b_end - b_mid) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+
+# --- LAYOUT HELPER ---
+line() { echo -e "${BORDER} ╭──────────────────────────────────────────────╮${NC}"; }
+mid()  { echo -e "${BORDER} ├──────────────────────────────────────────────┤${NC}"; }
+close(){ echo -e "${BORDER} ╰──────────────────────────────────────────────╯${NC}"; }
+
+# --- MAIN DISPLAY ---
 clear
-echo " "
-echo -e "\033[1;93m┌──────────────────────────────────────────┐\033[0m"
-echo " ";
-if [ -e "/root/log-limit.txt" ]; then
-echo "User Who Violate The Maximum Limit";
-echo "Time - Username - Number of Multilogin"
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
-cat /root/log-limit.txt
+echo -e ""
+print_gradient "╭══════════════════════════════════════════════╮"
+print_gradient "│       MASTONI GANTENG: LIVE LIMIT CHECKER      │"
+print_gradient "╰══════════════════════════════════════════════╯"
+echo -e ""
+
+# --- REAL-TIME LIMIT CHECKING ENGINE ---
+echo -ne " ${CYAN}⏳ Memindai koneksi aktif di server...${NC}\r"
+
+# 1. Ambil data user yang memiliki limit
+data=( $(ls /etc/kyt/limit/ssh/ip 2>/dev/null) )
+
+# 2. Siapkan log sukses
+grep -h -E "Accepted|succeeded" /var/log/auth.log.1 /var/log/auth.log 2>/dev/null > /tmp/auth_success_limit.log
+
+# 3. Ambil PID aktif (Support WebSocket OpenSSH & Dropbear)
+active_pids=$(ps ax -o pid,command 2>/dev/null | grep -E "dropbear|sshd" | grep -v "grep" | awk '{print $1}')
+
+VIOLATIONS=""
+count=0
+
+# 4. Evaluasi setiap user
+for user in "${data[@]}"; do
+    iplimit=$(cat /etc/kyt/limit/ssh/ip/$user)
+    cekcek=0
+    
+    for pid in $active_pids; do
+        log_entry=$(grep -F "[$pid]" /tmp/auth_success_limit.log | tail -n 1)
+        if [[ -n "$log_entry" ]]; then
+            match_user=$(echo "$log_entry" | awk '{for(i=1;i<=NF;i++) if($i=="for") {gsub(/['\'']/,"",$(i+1)); print $(i+1)}}')
+            if [[ "$match_user" == "$user" ]]; then
+                ((cekcek++))
+            fi
+        fi
+    done
+    
+    # Jika melebihi limit, masukkan ke dalam tabel pelanggaran
+    if [[ $cekcek -gt $iplimit ]]; then
+        ((count++))
+        printf -v row "${BORDER} │ ${YELLOW}%-14s ${CYAN}%-9s ${RED}%-19s ${BORDER}│${NC}\n" "${user:0:14}" "$iplimit IP" "$cekcek Login"
+        VIOLATIONS+="$row"
+    fi
+done
+
+# Bersihkan temporary file
+rm -f /tmp/auth_success_limit.log
+
+# Hapus teks loading
+echo -ne "\r\033[K"
+
+if [[ $count -gt 0 ]]; then
+    # === ADA PELANGGARAN ===
+    line
+    printf "${BORDER} │ ${RED}%-44s ${BORDER}│${NC}\n" "⚠️  WARNING: LIVE MULTILOGIN DETECTED!"
+    mid
+    printf "${BORDER} │ ${WHITE}%-14s %-9s %-19s ${BORDER}│${NC}\n" "USERNAME" "MAX LIMIT" "TERDETEKSI (LIVE)"
+    mid
+    echo -ne "$VIOLATIONS"
+    close
+    echo -e ""
+    echo -e " ${RED}[!] Action: Cronjob akan menendang otomatis${NC}"
+    echo -e " ${RED}            dalam waktu kurang dari 5 Menit.${NC}"
 else
-echo " No user has committed a violation"
-echo " "
-echo " or"
-echo " "
-echo " The user-limit script not been executed."
+    # === AMAN / TIDAK ADA PELANGGARAN ===
+    line
+    printf "${BORDER} │ ${GREEN}%-45s ${BORDER}│ ${NC}\n" "            ✅  NO VIOLATIONS FOUND" 
+    mid
+    printf "${BORDER} │ ${WHITE}%-44s ${BORDER}│${NC}\n" "  Semua user patuh pada batas Limit Login."
+    printf "${BORDER} │ ${WHITE}%-44s ${BORDER}│${NC}\n" "  Sistem berjalan normal dan aman."
+    close
 fi
-echo " ";
-echo -e "\033[1;93m└──────────────────────────────────────────┘\033[0m"
-echo " ";
+
+echo -e ""

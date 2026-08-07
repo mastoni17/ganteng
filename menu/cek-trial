@@ -1,0 +1,50 @@
+#!/bin/bash
+NC='\e[0m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;93m'
+CYAN='\033[0;36m'
+LIGHT='\033[0;37m'
+
+clear
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${CYAN}      DAFTAR AKUN TRIAL AKTIF (SISA WAKTU)       ${NC}"
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+
+# Mencari proses background yang sedang menghitung mundur trial
+processes=$(ps -eo etimes,cmd | grep "[h]apus-trial.sh")
+
+if [ -z "$processes" ]; then
+    echo -e "${LIGHT} Tidak ada akun trial yang sedang berjalan.${NC}"
+    echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    exit 0
+fi
+
+printf "${GREEN}%-20s | %-25s${NC}\n" "USERNAME" "SISA WAKTU"
+echo -e "${LIGHT}-------------------------------------------------${NC}"
+
+# Proses perhitungan dan penyaringan
+echo "$processes" | while read -r elapsed cmd_rest; do
+    # Ambil username
+    user=$(echo "$cmd_rest" | awk '{print $NF}')
+    
+    # Ambil total waktu asli (detik)
+    total_sec=$(echo "$cmd_rest" | grep -o 'sleep [0-9]*' | awk '{print $2}')
+    
+    # Pastikan variabel waktu terisi angka yang valid untuk mencegah error
+    if [[ -n "$total_sec" && "$total_sec" =~ ^[0-9]+$ ]]; then
+        remain_sec=$((total_sec - elapsed))
+        remain_min=$((remain_sec / 60))
+        
+        if [ $remain_min -le 0 ]; then
+            status="< 1 Menit (Akan dihapus)"
+        else
+            status="${remain_min} Menit Tersisa"
+        fi
+        
+        # Cetak output
+        printf "%-20s | %-25s\n" "$user" "$status"
+    fi
+done | sort -u # <--- KUNCI PENYELESAIANNYA ADA DI SINI (Hapus Duplikat)
+
+echo -e "${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""

@@ -31,10 +31,10 @@ fun_bar() {
 }
 res1() {
     cd /root
-    rm -rf bot.sh
+    rm -rf mastoni.sh
     cd /usr/bin
-    rm -rf kyt
-    rm -rf kyt.zip
+    rm -rf mastoni
+    rm -rf mastoni.zip
     rm -rf bot
     rm -rf bot.zip
     rm -rf bot-backup

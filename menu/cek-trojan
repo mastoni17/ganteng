@@ -1,0 +1,314 @@
+#!/bin/bash
+clear
+
+# --- Definisi Warna ---
+yellow="\033[1;33m"
+ungu="\033[1;35m"
+Red="\033[91;1m"
+Xark="\033[0m"
+BlueCyan="\033[1;36m"
+WhiteBe="\033[1;37m"
+GreenBe="\033[1;32m"
+YellowBe="\033[1;33m"
+BlueBe="\033[1;34m"
+BlinkGreen="\033[5;32m"
+
+# --- Ambil Nama Admin ---
+if [[ -e /etc/xray/username ]]; then
+    nama=$(cat /etc/xray/username)
+else
+    nama="Admin"
+fi
+
+# --- LOGIKA PENGHITUNGAN USER (100% AKURAT) ---
+vla=$(grep -E "^#& " "/etc/xray/config.json" 2>/dev/null | cut -d ' ' -f 2 | sort | uniq | grep -v "^$" | wc -l)
+vma=$(grep -E "^### " "/etc/xray/config.json" 2>/dev/null | cut -d ' ' -f 2 | sort | uniq | grep -v "^$" | wc -l)
+trb=$(grep -E "^#! " "/etc/xray/config.json" 2>/dev/null | cut -d ' ' -f 2 | sort | uniq | grep -v "^$" | wc -l)
+ssh1="$(awk -F: '$3 >= 1000 && $1 != "nobody" {print $1}' /etc/passwd 2>/dev/null | wc -l)"
+
+# --- VARIABEL GLOBAL UNTUK ARRAY USER ---
+declare -g -a ARR_TROJAN
+
+function baris_panjang() {
+  echo -e "${BlueCyan} —————————————————————————————————————————————————————— ${Xark} "
+}
+
+function xdxl_Banner() {
+    clear
+    baris_panjang
+    echo -e "${ungu}                $nama                ${Xark} "
+    baris_panjang
+    echo -e "${WhiteBe} SSH: ${GreenBe}$ssh1 ${WhiteBe}| ${YellowBe}VMESS: ${GreenBe}$vma ${WhiteBe}| ${BlueCyan}VLESS: ${GreenBe}$vla ${WhiteBe}| ${Red}TROJAN: ${GreenBe}$trb ${Xark}"
+    baris_panjang
+}
+
+function Sc_Credit(){
+    sleep 1
+    baris_panjang
+    echo -e "${ungu}  Terimakasih Telah Menggunakan ${Xark}"
+    echo -e "${ungu}            Script Credit ${Xark}"
+    echo -e "${ungu}            $nama ${Xark}"
+    baris_panjang
+    echo ""
+    read -rp "press any key for back"
+    m-trojan 
+}
+
+duration=3
+frames=("██10%" "█████35%" "█████████65%" "█████████████80%" "█████████████████████90%" "█████████████████████████100%")
+num_frames=${#frames[@]}
+num_iterations=$((duration))
+
+Loading_Animasi() {
+    for ((i = 0; i < num_iterations; i++)); do
+        clear
+        index=$((i % num_frames))
+        color_code=$((31 + i % 7))
+        echo ""
+        echo ""
+        echo ""
+        echo -e "\e[1;${color_code}m ${frames[$index]}\e[0m"
+        sleep 0.5
+    done
+}
+
+function Loading_Succes() {
+    clear
+    echo -e  "\033[1;32mSuccess\033[0m"
+    sleep 2
+    clear
+}
+
+function Daftar_Member_Trojan() {
+    baris_panjang
+    echo -e "${BlueCyan}                 LIST USER TROJAN                  ${Xark}"
+    echo -e " ------------------------------------------------------ "
+    printf "  %-3s | %-12s %-12s %-10s %-8s\n" "NO" "USERNAME" "EXP" "SISA" "STATUS"
+    echo -e " ------------------------------------------------------ "
+    
+    if [[ ! -f "/etc/xray/config.json" ]]; then
+        echo -e "${Red} File /etc/xray/config.json tidak ditemukan!${Xark}"
+        echo ""
+        read -n 1 -s -r -p "Press any key to back..."
+        m-trojan
+        exit 0
+    fi
+
+    data_user=$(grep -E "^#! " "/etc/xray/config.json" | cut -d ' ' -f 2-3 | sort | uniq)
+
+    if [[ -z "$data_user" ]]; then
+        echo -e "          ${Red}DATA USER TROJAN KOSONG!${Xark}"
+    else
+        i=1
+        while read -r line; do
+            u=$(echo "$line" | awk '{print $1}')
+            e=$(echo "$line" | awk '{print $2}')
+
+            exp_s=$(date -d "$e" +%s 2>/dev/null)
+            now_s=$(date -d "$(date +%Y-%m-%d)" +%s)
+            
+            if [[ -n "$exp_s" ]]; then
+                sisa_detik=$((exp_s - now_s))
+                sisa_hari=$((sisa_detik / 86400))
+                
+                if [ "$sisa_hari" -lt "0" ]; then
+                    tampil_sisa="${Red}Expired${Xark}"
+                    status="${Red}OFF${Xark}"
+                elif [ "$sisa_hari" -eq "0" ]; then
+                    tampil_sisa="${YellowBe}0 Hari${Xark}"
+                    status="${BlinkGreen}ON${Xark}"
+                else
+                    tampil_sisa="${GreenBe}${sisa_hari} Hari${Xark}"
+                    status="${BlinkGreen}ON${Xark}"
+                fi
+            else
+                tampil_sisa="???"
+                status="???"
+            fi
+
+            ARR_TROJAN[$i]="$u"
+
+            printf "  %-3s | %-12s %-12s %-19b %-17b\n" "$i" "$u" "$e" "$tampil_sisa" "$status"
+            ((i++))
+        done <<< "$data_user"
+    fi
+    echo -e " ------------------------------------------------------ "
+    baris_panjang
+    echo ""
+}
+
+# --- CEK DETAIL CONFIG TROJAN ---
+function Cek_Config_Trojan() {
+    echo -e " ${YellowBe}Ketik x atau kosongkan lalu enter untuk kembali.${Xark}"
+    read -rp " Input Nomor atau Username : " input_str
+    
+    # Pembersih spasi pada input
+    input_str=$(echo "$input_str" | tr -d ' ')
+    
+    # Kembali ke menu jika input kosong atau "x"
+    if [[ -z "$input_str" || "${input_str,,}" == "x" ]]; then
+        m-trojan
+        return
+    fi
+
+    # Logika Cek Input: Angka atau Huruf
+    if [[ "$input_str" =~ ^[0-9]+$ ]] && [[ -n "${ARR_TROJAN[$input_str]}" ]]; then
+        user="${ARR_TROJAN[$input_str]}"
+    else
+        user="$input_str"
+    fi
+
+    if ! grep -q "^#! $user" "/etc/xray/config.json"; then
+         echo -e "${Red}User '$user' tidak ditemukan di daftar Trojan!${Xark}"
+         read -n 1 -s -r -p "Enter Back To Menu"
+         m-trojan
+         return
+    fi
+
+    CITY=$(cat /etc/xray/city 2>/dev/null)
+    ISP=$(cat /etc/xray/isp 2>/dev/null)
+    domain=$(cat /etc/xray/domain 2>/dev/null)
+
+    # 1. CEK QUOTA (Hanya mengambil Angka Murni)
+    Quota="Unlimited"
+    if [[ -f "/etc/trojan/$user" ]]; then
+        cek_q=$(cat "/etc/trojan/$user" | tr -dc '0-9')
+        if [[ -n "$cek_q" && "$cek_q" -gt 0 ]]; then
+            Quota=$((cek_q / 1024 / 1024 / 1024))
+        fi
+    fi
+    if [[ "$Quota" == "Unlimited" || "$Quota" == "0" ]]; then
+        db_q=$(grep -w "^### $user" "/etc/trojan/.trojan.db" | awk '{print $5}' | tr -dc '0-9')
+        if [[ -n "$db_q" && "$db_q" != "0" ]]; then
+            Quota="$db_q"
+        fi
+    fi
+
+    # 2. CEK IP LIMIT (Hanya mengambil Angka Murni)
+    iplimit="Unlimited"
+    if [[ -f "/etc/kyt/limit/trojan/ip/$user" ]]; then
+        cek_ip=$(cat "/etc/kyt/limit/trojan/ip/$user" | tr -dc '0-9')
+        if [[ -n "$cek_ip" && "$cek_ip" != "0" ]]; then
+            iplimit="$cek_ip"
+        fi
+    fi
+    if [[ "$iplimit" == "Unlimited" || "$iplimit" == "0" ]]; then
+        db_ip=$(grep -w "^### $user" "/etc/trojan/.trojan.db" | awk '{print $6}' | tr -dc '0-9')
+        if [[ -n "$db_ip" && "$db_ip" != "0" ]]; then
+            iplimit="$db_ip"
+        fi
+    fi
+
+    # 3. AMBIL UUID
+    uuid=$(grep -w "$user" -A 1 /etc/xray/config.json | grep "password" | cut -d '"' -f 4 | head -n 1)
+    if [[ -z "$uuid" ]]; then
+        uuid=$(grep -E "^},{" "/etc/xray/config.json" | grep -i '"'"${user}"'"' | cut -d " " -f 2 | cut -d '"' -f 2 | head -n 1)
+    fi
+
+    # 4. AMBIL SISA HARI
+    exp=$(grep -E "^#! " "/etc/xray/config.json" | grep -w "$user" | cut -d ' ' -f 3 | head -n 1 | tr -d '\r\n\t ')
+    if [[ -z "$exp" ]]; then
+        exp=$(grep -w "^### $user" "/etc/trojan/.trojan.db" | awk '{print $3}' | tr -d '\r\n\t ')
+    fi
+
+    exp_s=$(date -d "$exp" +%s 2>/dev/null)
+    now_s=$(date -d "$(date +%Y-%m-%d)" +%s 2>/dev/null)
+    
+    if [[ -n "$exp_s" && -n "$now_s" ]]; then
+        sisa_hari=$(( (exp_s - now_s) / 86400 ))
+        if [[ "$sisa_hari" -lt "0" ]]; then
+            status_exp="\033[0;31mExpired\033[0m"
+        else
+            status_exp="\033[0;32m$sisa_hari Hari Lagi\033[0m"
+        fi
+    else
+        status_exp="\033[0;31mError Kalkulasi Tanggal\033[0m"
+    fi
+
+    # --- GENERATE LINK TROJAN ---
+    trojanlink1="trojan://${uuid}@${domain}:443?path=%2Ftrojan-ws&security=tls&host=${domain}&type=ws&sni=${domain}#${user}"
+    trojanlink2="trojan://${uuid}@${domain}:443?mode=gun&security=tls&type=grpc&serviceName=trojan-grpc&sni=${domain}#${user}"
+    trojanlink3="trojan://${uuid}@${domain}:443?path=%2Ftrojan-up&security=tls&host=${domain}&type=httpupgrade&sni=${domain}#${user}"
+
+    # --- GENERATE FILE TXT KE WEB SERVER AGAR BISA DIBUKA DI BROWSER ---
+    mkdir -p /var/www/html
+    cat > /var/www/html/trojan-$user.txt <<-END
+==================================================
+        MASTONI GANTENG : TROJAN XRAY INFO
+==================================================
+Remarks     : ${user}
+Domain      : ${domain}
+User Quota  : ${Quota} GB
+User Ip     : ${iplimit} IP
+Port TLS    : 443
+Password    : ${uuid}
+Locations   : ${CITY}
+ISP         : ${ISP}
+Path WS     : /trojan-ws
+Path UPG    : /trojan-up
+ServiceName : trojan-grpc
+==================================================
+Link WS TLS :
+${trojanlink1}
+
+Link GRPC   :
+${trojanlink2}
+
+Link UPGRADE:
+${trojanlink3}
+==================================================
+Expired Date: ${exp}
+==================================================
+END
+    chmod 644 /var/www/html/trojan-$user.txt
+}
+
+function Details_Account() {
+    baris_panjang
+    echo -e "\033[1;37m TROJAN XRAY INFO \033[0m"
+    baris_panjang
+    echo -e ""
+    echo -e "\033[1;37m Remarks     : ${user} "
+    echo -e "\033[1;37m Domain      : ${domain}"
+    echo -e "\033[1;37m User Quota  : ${Quota} GB"
+    echo -e "\033[1;37m User Ip     : ${iplimit} IP"
+    echo -e "\033[1;37m Port TLS    : 443"
+    echo -e "\033[1;37m Password    : ${uuid}"
+    echo -e "\033[1;37m Locations   : $CITY"
+    echo -e "\033[1;37m ISP         : $ISP"
+    echo -e "\033[1;37m Path WS     : /trojan-ws "
+    echo -e "\033[1;37m Path UPG    : /trojan-up "
+    echo -e "\033[1;37m ServiceName : trojan-grpc"
+}
+
+function Link_Json() {
+    baris_panjang
+    echo -e "\033[1;37m Link WS TLS : ${trojanlink1}"
+    baris_panjang
+    echo -e "\033[1;37m Link GRPC   : ${trojanlink2}"
+    baris_panjang
+    echo -e "\033[1;37m Link UPGRADE: ${trojanlink3}"
+    baris_panjang
+    echo -e "\033[1;37m OpenClash   : https://${domain}:81/trojan-$user.txt"
+}
+
+function Details_Expiry() {
+    baris_panjang
+    echo -e " \033[1;33mExpired Date: $exp\033[0m"
+    echo -e " \033[1;33mSisa Aktif  : $status_exp\033[0m"
+    baris_panjang
+}
+
+# --- EKSEKUSI ---
+xdxl_Banner
+echo ""
+Daftar_Member_Trojan
+echo ""
+Cek_Config_Trojan
+clear
+Loading_Animasi
+Loading_Succes
+Details_Account
+Link_Json
+Details_Expiry
+Sc_Credit

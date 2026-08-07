@@ -1,44 +1,290 @@
 #!/bin/bash
-# ==========================================
-# Color
-RED='\033[0;31m'
-NC='\033[0m'
-GREEN='\033[0;32m'
-ORANGE='\033[0;33m'
-BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-CYAN='\033[0;36m'
-LIGHT='\033[0;37m'
-clear
-# ==========================================
-echo -e "${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "                MEMBER SSH                   "
-echo -e "${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo "USERNAME          EXP DATE          "
-echo -e "${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-while read expired
-do
-AKUN="$(echo $expired | cut -d: -f1)"
-ID="$(echo $expired | grep -v nobody | cut -d: -f3)"
-exp="$(chage -l $AKUN | grep "Account expires" | awk -F": " '{print $2}')"
-status="$(passwd -S $AKUN | awk '{print $2}' )"
-if [[ $ID -ge 1000 ]]; then
-if [[ "$status" = "L" ]]; then
-printf "%-17s %2s %-17s %2s \n" "$AKUN" "$exp     "
-else
-printf "%-17s %2s %-17s %2s \n" "$AKUN" "$exp     "
+# --- INSTALL DEPENDENCY ---
+if ! command -v jq &> /dev/null; then
+    apt-get install jq -y > /dev/null 2>&1
 fi
-fi
-done < /etc/passwd
-echo -e "${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo -e "                DELETE SSH                   "
-echo -e "${ORANGE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\033[0m"
-echo ""
-read -p "Ketik Usernamenya : " Pengguna
 
-if getent passwd $Pengguna > /dev/null 2>&1; then
-        userdel $Pengguna > /dev/null 2>&1
-        echo -e "Nama $Pengguna Succes Delete."
-else
-        echo -e "Failure: User $Pengguna Has Been Removed."
-fi
+# --- DEFINISI WARNA (FIXED) ---
+y='\033[1;33m'       
+z='\033[96m'         
+RED='\033[1;31m'    
+NC='\033[0m'         
+green='\033[1;32m'   
+purple="\033[1;95m"
+BOLD='\033[1m'
+WHITE='\033[1;37m'
+
+# --- CONFIG ---
+ZIVPN_CONFIG="/etc/zivpn/config.json"
+ZIVPN_DB="/etc/zivpn/user-db.json"
+SERVICE_NAME="zivpn.service"
+BACKUP_FILE="/etc/ssh_backup" 
+USAGE_DB="/etc/ssh/usage_db"
+DB_FILE="/etc/ssh/.ssh.db"
+
+# ==================================================
+# FUNGSI GRADASI
+# ==================================================
+print_gradient() {
+    local text="$1"
+    awk -v text="$text" 'BEGIN {
+        len = length(text);
+        r_start=255; g_start=215; b_start=0;
+        r_mid=0;     g_mid=128;   b_mid=255;
+        r_end=138;   g_end=43;    b_end=226;
+        for (i=0; i<len; i++) {
+            ratio = i / (len-1);
+            if (ratio <= 0.5) {
+                f = ratio * 2;
+                r = int(r_start + (r_mid - r_start) * f);
+                g = int(g_start + (g_mid - g_start) * f);
+                b = int(b_start + (b_mid - b_start) * f);
+            } else {
+                f = (ratio - 0.5) * 2;
+                r = int(r_mid + (r_end - r_mid) * f);
+                g = int(g_mid + (g_end - g_mid) * f);
+                b = int(b_mid + (b_end - b_mid) * f);
+            }
+            printf "\033[38;2;%d;%d;%dm%s", r, g, b, substr(text, i+1, 1);
+        }
+        printf "\033[0m\n";
+    }'
+}
+
+# ==================================================
+# MAIN LOOP
+# ==================================================
+while true; do
+    # Reset Array & Tracking setiap kali loop
+    unset USER_LIST
+    unset SEEN_USERS
+    declare -a USER_LIST
+    declare -A SEEN_USERS
+    
+    clear
+    echo -e " "
+    print_gradient "╭══════════════════════════════════════════════════════════╮"
+    print_gradient "│        DELETE SSH & ZIVPN ACCOUNT (WITH ARCHIVE)         │"
+    print_gradient "╰══════════════════════════════════════════════════════════╯"
+
+    # Table Header
+    echo -e " ${z}╭────┬──────────────────┬──────────────┬──────────────┬────╮${NC}"
+    echo -e " ${z}│${NC} ${BOLD}NO${NC} ${z}│${NC} ${BOLD}USERNAME${NC}          ${z}│${NC} ${BOLD}EXP DATE${NC}      ${z}│${NC} ${BOLD}COUNTDOWN${NC}     ${z}│${NC} ${BOLD}ST${NC} ${z}│${NC}"
+    echo -e " ${z}╞════╪══════════════════╪══════════════╪══════════════╪════╡${NC}"
+
+    total_user=0
+    total_active=0
+    total_expired=0
+    num=0
+
+    # 1. Loop membaca /etc/passwd (Sistem Linux)
+    while IFS=: read -r user pass uid gid info home shell; do
+        if [[ "$uid" -ge 1000 && "$user" != "nobody" ]]; then
+            ((num++))
+            ((total_user++))
+            
+            # Simpan ke Array & Tandai sudah dilihat
+            USER_LIST[$num]=$user
+            SEEN_USERS["$user"]=1
+            
+            # Ambil Data Expired
+            exp_str=$(chage -l "$user" | grep "Account expires" | cut -d: -f2 | sed 's/^ //g')
+            display_exp="${exp_str:0:12}"
+            
+            # Cek Status Password
+            status_raw=$(passwd -S "$user" | awk '{print $2}')
+            
+            # Logic Warna ICON
+            TXT_COLOR=$z 
+            
+            if [[ "$exp_str" == "never" || -z "$exp_str" ]]; then
+                TXT_COUNT="Forever"
+                ICON="♾️"
+                ICON_COLOR=$green
+                ((total_active++))
+            else
+                today_sec=$(date +%s)
+                exp_sec=$(date -d "$exp_str" +%s 2>/dev/null)
+                
+                if [ $? -eq 0 ]; then
+                    diff_sec=$((exp_sec - today_sec))
+                    diff_days=$((diff_sec / 86400))
+                    
+                    if [[ "$status_raw" == "L" ]]; then
+                        TXT_COUNT="${diff_days} Days"
+                        ICON="🔒"
+                        ICON_COLOR=$RED
+                    elif [[ "$diff_days" -lt 0 ]]; then
+                        TXT_COUNT="Overdue"
+                        ICON="●"
+                        ICON_COLOR=$RED
+                        ((total_expired++))
+                    elif [[ "$diff_days" -le 2 ]]; then
+                        TXT_COUNT="${diff_days} Days"
+                        ICON="●"
+                        ICON_COLOR=$y
+                        ((total_active++))
+                    else
+                        TXT_COUNT="${diff_days} Days"
+                        ICON="●"
+                        ICON_COLOR=$green
+                        ((total_active++))
+                    fi
+                else
+                    TXT_COUNT="Error"
+                    ICON="❓"
+                    ICON_COLOR=$RED
+                fi
+            fi
+
+            # PRINT BARIS TABEL
+            printf " ${z}│${NC} %-2s ${z}│${NC} %-16s ${z}│${NC} %-12s ${z}│${NC} ${z}%-12s${NC} ${z}│${NC} ${ICON_COLOR}%-2s${NC} ${z}│${NC}\n" \
+            "$num" "$user" "$display_exp" "$TXT_COUNT" "$ICON"
+        fi
+    done < /etc/passwd
+
+    # 2. Loop membaca /etc/ssh/.ssh.db (User Hantu/Nyangkut)
+    if [ -f "$DB_FILE" ]; then
+        while read -r tag db_user pass quota limit exp1 exp2 exp3; do
+            if [[ "$tag" == "#ssh#" ]]; then
+                # Jika user ada di DB tapi TIDAK ADA di SEEN_USERS (Linux)
+                if [[ -z "${SEEN_USERS[$db_user]}" ]]; then
+                    ((num++))
+                    ((total_user++))
+                    ((total_expired++)) # Kita anggap expired/error karena tidak ada di sistem
+                    
+                    # Simpan ke Array
+                    USER_LIST[$num]=$db_user
+                    SEEN_USERS["$db_user"]=1
+                    
+                    db_exp_date="$exp1 $exp2 $exp3"
+                    display_exp="${db_exp_date:0:12}"
+                    [[ -z "$display_exp" || "$display_exp" == "  " ]] && display_exp="Unknown "
+
+                    TXT_COUNT="DB Only"
+                    ICON="⚠️"
+                    ICON_COLOR=$RED
+
+                    # PRINT BARIS TABEL KHUSUS DB ONLY
+                    printf " ${z}│${NC} %-2s ${z}│${NC} %-16s ${z}│${NC} %-12s ${z}│${NC} ${RED}%-12s${NC} ${z}│${NC} ${ICON_COLOR}%-2s${NC} ${z}│${NC}\n" \
+                    "$num" "$db_user" "$display_exp" "$TXT_COUNT" "$ICON"
+                fi
+            fi
+        done < "$DB_FILE"
+    fi
+
+    echo -e " ${z}╰────┴──────────────────┴──────────────┴──────────────┴────╯${NC}"
+
+    # Footer Stats
+    echo -e ""
+    echo -e "  ${BOLD}Total:${NC} $total_user    ${green}Active:${NC} $total_active    ${RED}Expired/Error:${NC} $total_expired"
+    echo -e ""
+
+    # ==================================================
+    # SELECTION PROCESS
+    # ==================================================
+    print_gradient "════════════════════════════════════════════════════════════"
+    echo -e " ${BOLD}DELETE ACTION${NC}"
+    print_gradient "════════════════════════════════════════════════════════════"
+    echo -e " Type ${RED}x${NC} or ${RED}menu${NC} to return to Main Menu"
+    read -p " Select Number (1-$num) or Username : " selection
+
+    # 1. Cek jika user ingin keluar/ke menu
+    if [[ "$selection" == "x" || "$selection" == "menu" ]]; then
+        clear
+        menu
+        break
+    fi
+
+    # 2. Validasi Input Kosong
+    if [[ -z "$selection" ]]; then
+        echo -e " ${RED}[!] Action Cancelled.${NC}"
+        sleep 1
+        continue
+    fi
+
+    # 3. Logic: Angka atau Username?
+    if [[ "$selection" =~ ^[0-9]+$ ]]; then
+        if [ "$selection" -gt "$num" ] || [ "$selection" -lt 1 ]; then
+            echo -e " ${RED}❌ Error: Number out of range!${NC}"
+            sleep 1
+            continue
+        fi
+        Pengguna=${USER_LIST[$selection]}
+    else
+        Pengguna=$selection
+    fi
+
+    # ==================================================
+    # EXECUTION
+    # ==================================================
+    if getent passwd "$Pengguna" > /dev/null 2>&1 || grep -qw "$Pengguna" "$DB_FILE"; then
+        echo -e ""
+        echo -e " ${z}[PROCESS]${NC} Processing User: ${y}$Pengguna${NC}..."
+        
+        # ==========================================
+        # 1. ARCHIVE / BACKUP LOGIC
+        # ==========================================
+        PASS_HASH=$(grep -w "^$Pengguna" /etc/shadow | cut -d: -f2)
+        if [[ ! -f "$BACKUP_FILE" ]]; then touch "$BACKUP_FILE"; fi
+        ARCHIVED_STATUS="NO"
+
+        if [[ -n "$PASS_HASH" ]]; then
+            if ! grep -q "^$Pengguna:" "$BACKUP_FILE"; then
+                echo "$Pengguna:$PASS_HASH" >> "$BACKUP_FILE"
+                ARCHIVED_STATUS="YES"
+                echo -e " ${green}[ARCHIVE]${NC} User saved to Recycle Bin."
+            else
+                ARCHIVED_STATUS="ALREADY"
+                echo -e " ${y}[ARCHIVE]${NC} User already in Recycle Bin."
+            fi
+        fi
+
+        # ==========================================
+        # 2. DELETE PROCESS (FIXED CLEANUP)
+        # ==========================================
+        
+        # A. System Delete (Abaikan jika error karena user tidak ada di sistem)
+        userdel -f "$Pengguna" > /dev/null 2>&1
+        rm -rf /home/$Pengguna > /dev/null 2>&1
+        
+        # B. ZiVPN Delete
+        if [ -f "$ZIVPN_CONFIG" ]; then
+            if jq -e ".auth.config | index(\"$Pengguna\")" "$ZIVPN_CONFIG" > /dev/null; then
+                jq --arg u "$Pengguna" '.auth.config -= [$u]' "$ZIVPN_CONFIG" > "${ZIVPN_CONFIG}.tmp" && mv "${ZIVPN_CONFIG}.tmp" "$ZIVPN_CONFIG"
+                jq --arg u "$Pengguna" 'del(.[$u])' "$ZIVPN_DB" > "${ZIVPN_DB}.tmp" && mv "${ZIVPN_DB}.tmp" "$ZIVPN_DB"
+                systemctl restart "$SERVICE_NAME" > /dev/null 2>&1
+                echo -e " ${green}[  OK  ]${NC} Removed from ZiVPN Database"
+            fi
+        fi
+
+        # C. Cronjob Trial Clean
+        if [ -f "/etc/cron.d/trialssh-$Pengguna" ]; then
+            rm -f "/etc/cron.d/trialssh-$Pengguna"
+            service cron reload > /dev/null 2>&1
+            echo -e " ${green}[  OK  ]${NC} Trial Auto-Kill Stopped"
+        fi
+
+        # D. Ultimate Cleanup Files
+        # Membuang spasi di belakang $Pengguna agar pencocokan mutlak
+        sed -i "/^#ssh# ${Pengguna}\b/d" "$DB_FILE" > /dev/null 2>&1
+        rm -f "/var/www/html/ssh-$Pengguna.txt" > /dev/null 2>&1
+        rm -f "/etc/kyt/limit/ssh/ip/$Pengguna" > /dev/null 2>&1
+        
+        # E. Hapus Tabungan Kuota (V7.2)
+        rm -f "$USAGE_DB/$Pengguna.total" > /dev/null 2>&1
+        rm -f "$USAGE_DB/$Pengguna.last" > /dev/null 2>&1
+        
+        echo -e ""
+        echo -e " ${green}✅ SUCCESS:${NC} Account ${y}$Pengguna${NC} fully deleted & cleaned."
+        if [[ "$ARCHIVED_STATUS" == "YES" ]]; then
+             echo -e " ${z}ℹ️  NOTE:${NC} You can restore this user later."
+        fi
+        echo -e " List will refresh in 2 seconds..."
+        sleep 2
+    else
+        echo -e ""
+        echo -e " ${RED}❌ ERROR:${NC} User ${y}$Pengguna${NC} Not Found."
+        sleep 2
+    fi
+done

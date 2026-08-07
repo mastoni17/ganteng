@@ -1,33 +1,97 @@
 #!/bin/bash
-function send_log(){
-CHATID=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 3)
-KEY=$(grep -E "^#bot# " "/etc/bot/.bot.db" | cut -d ' ' -f 2)
-TIME="10"
-URL="https://api.telegram.org/bot$KEY/sendMessage"
-TEXT="
-<code>────────────────────</code>
-<b>⚠️ NOTIFICATIONS MULTI LOGIN ⚠️</b>
-<code>────────────────────</code>
-<code>Username  : </code><code>$user</code>
-<code>Limit Ip  : </code><code>$iplimit</code>
-<code>────────────────────</code>
-"
-curl -s --max-time $TIME -d "chat_id=$CHATID&disable_web_page_preview=1&text=$TEXT&parse_mode=html" $URL >/dev/null
-}
-mulog=$(mesinssh)
-date=$(date)
-data=( `ls /etc/kyt/limit/ssh/ip`);
-for user in "${data[@]}"
-do
-iplimit=$(cat /etc/kyt/limit/ssh/ip/$user)
-cekcek=$(echo -e "$mulog" | grep $user | wc -l);
-if [[ $cekcek -gt $iplimit ]]; then
-egrep "^$user" /etc/passwd >/dev/null
-passwd -l $user
-echo -e "$waktu\nRemoved User: $user Login: $cekcek IP Max: $ip IP \n" >> /etc/kyt/log/ssh/ssh.log
-send_log
+
+# Sumber file konfigurasi
+if [ -f "/usr/bin/kyt/var.txt" ]; then
+    source /usr/bin/kyt/var.txt
 else
-echo > /dev/null
+    echo "Error: File /usr/bin/kyt/var.txt tidak ditemukan!"
+    exit 1
 fi
-sleep 0.1
+
+# ==========================================
+# KONFIGURASI TOLERANSI & ANTI-SPAM
+# ==========================================
+MULTI_LOGIN_PER_IP=2 # 1 IP / Device diizinkan punya 2 proses (cabang koneksi aplikasi)
+TOLERANSI_PROSES=1   # Toleransi tambahan sebelum dieksekusi kill
+COOLDOWN_NOTIF=600   
+COOLDOWN_DIR="/tmp/limit_cooldown"
+
+mkdir -p "$COOLDOWN_DIR"
+
+function send_log(){
+    TIME="10"
+    URL="https://api.telegram.org/bot$BOT_TOKEN/sendMessage"
+    TEXT="<code>────────────────────</code>
+<b>🚨 PELANGGARAN MULTI LOGIN 🚨</b>
+<code>────────────────────</code>
+👤 <b>Username</b> : <code>$user</code>
+🌐 <b>Batas Limit IP</b> : <code>$iplimit Device</code>
+⚙️ <b>Max Proses (x$MULTI_LOGIN_PER_IP)</b> : <code>$batas_maksimal Proses (Inc. Toleransi)</code>
+🔍 <b>Terdeteksi</b>: <code>$cekcek Proses Aktif</code>
+🚫 <b>Status</b>: <b>DI-KICK (Putus Paksa)</b>
+<code>────────────────────</code>
+<i>🔇 Notif disenyapkan selama $((COOLDOWN_NOTIF / 60)) menit.</i>"
+    
+    REPLY_MARKUP='{"inline_keyboard":[[{"text":"🔙 Kembali ke Menu","callback_data":"menu"}]]}'
+
+    curl -s --max-time $TIME -G \
+        --data-urlencode "chat_id=$ADMIN" \
+        --data-urlencode "disable_web_page_preview=1" \
+        --data-urlencode "text=$TEXT" \
+        --data-urlencode "parse_mode=HTML" \
+        "$URL" >/dev/null
+}
+
+tanggal=$(date +"%Y-%m-%d %H:%M:%S")
+data=( $(ls /etc/kyt/limit/ssh/ip 2>/dev/null) )
+
+for user in "${data[@]}"; do
+    iplimit=$(cat "/etc/kyt/limit/ssh/ip/$user" 2>/dev/null)
+    if ! [[ "$iplimit" =~ ^[0-9]+$ ]]; then continue; fi
+    
+    # Hitung OpenSSH
+    ssh_cek=$(ps -u "$user" -o comm= 2>/dev/null | grep -c "^sshd$")
+    
+    # Hitung Dropbear
+    dropbear_cek=0
+    dropbear_pids_to_kill=""
+    dropbear_pids=$(ps ax 2>/dev/null | grep "[d]ropbear" | awk '{print $1}')
+    
+    for pid in $dropbear_pids; do
+        log_entry=$(grep -E "dropbear\[$pid\]: (Password|Pubkey) auth succeeded" /var/log/auth.log /var/log/auth.log.1 2>/dev/null | tail -n 1)
+        if [[ -n "$log_entry" ]]; then
+            duser=$(echo "$log_entry" | awk -F'for ' '{print $2}' | awk '{print $1}' | tr -d "'")
+            if [[ "$duser" == "$user" ]]; then
+                ((dropbear_cek++))
+                dropbear_pids_to_kill+=" $pid"
+            fi
+        fi
+    done
+    
+    # Total gabungan proses aktif
+    cekcek=$((ssh_cek + dropbear_cek))
+    
+    # LOGIKA BARU: (Limit IP * 2) + Toleransi
+    batas_maksimal=$(( (iplimit * MULTI_LOGIN_PER_IP) + TOLERANSI_PROSES ))
+    
+    if [[ "$cekcek" -gt "$batas_maksimal" ]]; then
+        echo -e "$tanggal | KICK User: $user | Login: $cekcek | Max: $batas_maksimal Proses" >> /etc/kyt/log/ssh/ssh.log
+        
+        pkill -u "$user" 2>/dev/null
+        if [[ -n "$dropbear_pids_to_kill" ]]; then
+            kill -9 $dropbear_pids_to_kill 2>/dev/null
+        fi
+        
+        waktu_sekarang=$(date +%s)
+        waktu_terakhir=0
+        if [[ -f "$COOLDOWN_DIR/$user" ]]; then
+            waktu_terakhir=$(cat "$COOLDOWN_DIR/$user")
+        fi
+        selisih_waktu=$((waktu_sekarang - waktu_terakhir))
+        if [[ "$selisih_waktu" -ge "$COOLDOWN_NOTIF" ]]; then
+            send_log
+            echo "$waktu_sekarang" > "$COOLDOWN_DIR/$user"
+        fi
+    fi
+    sleep 0.1
 done

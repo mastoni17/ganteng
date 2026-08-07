@@ -184,6 +184,7 @@ status_haproxy=$(cek_service haproxy)
 status_xray=$(cek_service xray)
 status_nginx=$(cek_service nginx)
 status_dropbear=$(cek_service dropbear)
+status_zivpn=$(cek_service zivpn)
 status_udp_custom=$(cek_service udp-custom)
 
 if systemctl is-active --quiet server-sldns; then
@@ -248,14 +249,16 @@ print_gradient "                   INFORMATION SERVICE ON VPS  "
 print_gradient "══════════════════════════════════════════════════════════"
 echo -e "${NC}$y SSH$NC     : $status_ssh" "  $y NGINX$NC      : $status_nginx" "    $y XRAY$NC    : $status_xray  $NC" 
 echo -e "${NC}$y WS-ePRO$NC : $ssh_ws_status"  " $y  DROPBEAR$NC   : $status_dropbear" "    $y HAPROXY$NC : $status_haproxy  $NC" 
+echo -e "${NC}$y ZiVPN$NC   : $status_zivpn"    "  $y UDP-CUSTOM$NC : $status_udp_custom" "    $y SLOWDNS$NC : $status_slowdns  $NC"
 print_gradient "══════════════════════════════════════════════════════════"
 print_gradient "                   ALL FITUR SC TUNNELING "
 print_gradient "══════════════════════════════════════════════════════════"
 echo -e "${z}$NC [${r}01${NC}]$green MENU SSH$NC         $NC${y}│$NC  	[${r}06${NC}]$green MENU TRIAL$NC     ${z} $NC"
 echo -e "${z}$NC [${r}02${NC}]$green MENU VMESS$NC       $NC${Blue}│$NC  	[${r}07${NC}]$green SPEEDTEST$NC    ${z} $NC"
 echo -e "${z}$NC [${r}03${NC}]$green MENU VLESS$NC       $NC${r}│$NC  	[${r}08${NC}]$green MENU UTILITY$NC   ${z} $NC"
-echo -e "${z}$NC [${r}04${NC}]$green MENU TROJAN$NC      $NC${green}│$NC  	[${r}10${NC}]$green CEK VPS$NC        ${z} $NC"
-echo -e "${z}$NC [${r}05${NC}]$green MENU SSWS$NC        $NC${green}│$NC  	[${r}12${NC}]$green MENU WARP       ${z} $NC"        
+echo -e "${z}$NC [${r}04${NC}]$green MENU TROJAN$NC      $NC${z}│$NC  	[${r}09${NC}]$green MENU ZIVPN$NC     ${z} $NC"
+echo -e "${z}$NC [${r}05${NC}]$green MENU SSWS$NC        $NC${green}│$NC  	[${r}10${NC}]$green CEK VPS$NC        ${z} $NC"
+echo -e "${z}$NC [${r}11${NC}]$green MENU SLOW DNS$NC    $NC${Blue}│$NC  	[${r}12${NC}]$green MENU WARP       ${z} $NC"
 print_gradient "══════════════════════════════════════════════════════════"
 echo -e ""
 read -p " PILIH MENU DENGAN CARA KETIK 1/10 : " opt
@@ -269,6 +272,7 @@ case $opt in
 6 | 06) clear ; m-trial ;;
 7 | 07) clear ; run_speedtest_cool ; menu ;;
 8 | 08) clear ; menu-x ;;
+9 | 09) clear ; zivpn-menu ;;
 10 | 10) clear ; cek-vps ;;
 11 | 11) clear ; menu-slowdns ;;
 12 | 12) clear ; menu-warp ;;
