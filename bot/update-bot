@@ -1,0 +1,152 @@
+#!/bin/bash
+
+# ==================================================
+#            PERSIAPAN & DEPENDENSI
+# ==================================================
+
+# Pastikan tool dasar terinstall
+apt-get install ruby zip unzip wget -y > /dev/null 2>&1
+if ! command -v lolcat &> /dev/null; then
+    gem install lolcat &> /dev/null
+fi
+
+clear
+
+# ==================================================
+#            FUNGSI ANIMASI LOADING
+# ==================================================
+fun_bar() {
+    CMD="$1"
+    
+    # Menjalankan perintah update di background
+    (
+        [[ -e $HOME/fim ]] && rm $HOME/fim
+        $CMD >/dev/null 2>&1
+        touch $HOME/fim
+    ) >/dev/null 2>&1 &
+
+    # Memulai Animasi
+    tput civis # Sembunyikan kursor
+    echo -ne "  \033[0;33mSedang Memproses Update \033[1;37m- \033[0;33m["
+    
+    while true; do
+        for ((i = 0; i < 18; i++)); do
+            echo -ne "\033[0;32m#"
+            sleep 0.1s
+        done
+        
+        # Cek jika proses selesai
+        if [[ -e $HOME/fim ]]; then
+            rm $HOME/fim
+            break
+        fi
+        
+        # Reset baris loading jika belum selesai
+        echo -e "\033[0;33m]"
+        sleep 1s
+        tput cuu1
+        tput dl1
+        echo -ne "  \033[0;33mSedang Memproses Update \033[1;37m- \033[0;33m["
+    done
+    
+    # Tampilan Selesai
+    echo -e "\033[0;33m]\033[1;37m -\033[1;32m SUKSES !\033[1;37m"
+    tput cnorm # Tampilkan kursor kembali
+}
+
+# ==================================================
+#            FUNGSI UPDATE UTAMA
+# ==================================================
+res1() {
+    # Hentikan service dulu agar file tidak terkunci
+    systemctl stop kyt
+
+    # --- 1. UPDATE MODULES ---
+    rm -rf /usr/bin/kyt/modules
+    mkdir -p /usr/bin/kyt/modules
+    
+    # Download Modules
+    wget -q -O modules.zip "https://raw.githubusercontent.com/mastoni17/ganteng/main/bot/modules.zip"
+    unzip -o modules.zip > /dev/null 2>&1
+    
+    if [ -d "modules" ]; then
+        chmod +x modules/*
+        mv modules/* /usr/bin/kyt/modules/
+        rm -rf modules
+    else
+        echo "Zip structure check..." 
+    fi
+    rm -f modules.zip
+    
+    # --- 2. UPDATE SHELL ---
+    rm -rf /usr/bin/kyt/shell
+    mkdir -p /usr/bin/kyt/shell
+    
+    # Download Shell
+    wget -q -O shell.zip "https://raw.githubusercontent.com/mastoni17/ganteng/main/bot/shell.zip"
+    unzip -o shell.zip > /dev/null 2>&1
+    
+    if [ -d "shell" ]; then
+        chmod +x shell/*
+        mv shell/* /usr/bin/kyt/shell/
+        rm -rf shell
+    fi
+    rm -f shell.zip
+    chmod +x -R /usr/bin/kyt/shell/
+    chmod +x -R /usr/bin/kyt/modules/
+    
+    # Fix carriage returns untuk detail bot
+    sed -i 's/\r$//' /usr/bin/kyt/shell/bot/bot-shadowsocks-detail
+    sed -i 's/\r$//' /usr/bin/kyt/shell/bot/bot-vless-detail
+    sed -i 's/\r$//' /usr/bin/kyt/shell/bot/bot-vmess-detail
+    sed -i 's/\r$//' /usr/bin/kyt/shell/bot/bot-trojan-detail
+
+    # --- 3. UPDATE BOT COMMANDS KE /usr/bin (BARU) ---
+    # Buat direktori sementara agar ekstraksi aman
+    mkdir -p /tmp/bot_update_temp
+    wget -q -O /tmp/bot_update_temp/bot.zip "https://github.com/mastoni17/ganteng/raw/refs/heads/main/bot/bot.zip"
+    
+    # Ekstrak di direktori sementara
+    unzip -o /tmp/bot_update_temp/bot.zip -d /tmp/bot_update_temp/ > /dev/null 2>&1
+    rm -f /tmp/bot_update_temp/bot.zip
+    
+    # Cek jika di dalam zip terdapat folder bernama 'bot' atau isinya langsung file (flat)
+    if [ -d "/tmp/bot_update_temp/bot" ]; then
+        chmod +x /tmp/bot_update_temp/bot/*
+        cp -rf /tmp/bot_update_temp/bot/* /usr/bin/
+    else
+        chmod +x /tmp/bot_update_temp/*
+        cp -rf /tmp/bot_update_temp/* /usr/bin/
+    fi
+    # Bersihkan folder sementara
+    rm -rf /tmp/bot_update_temp
+
+    # --- 4. RESTART SERVICE ---
+    systemctl enable kyt
+    systemctl restart kyt
+    chmod +x -R /usr/bin/kyt/shell/
+    chmod +x -R /usr/bin/kyt/modules/
+}
+
+# ==================================================
+#            EKSEKUSI MENU
+# ==================================================
+
+# Hapus file update-bot lama agar bersih
+rm -rf update-bot
+
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | lolcat
+echo -e " \e[1;97;101m UPDATE BOT TELEGRAM  !              \e[0m"
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | lolcat
+echo -e ""
+echo -e "  \033[1;91m Update Script Service, Menu & Bot\033[1;37m"
+
+# Jalankan fungsi update dengan loading bar
+fun_bar 'res1'
+
+echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" | lolcat
+echo -e ""
+echo -e " \033[1;32m Update Selesai! Cek Bot /start.\033[0m"
+echo -e ""
+read -n 1 -s -r -p "Tekan [ Enter ] untuk kembali ke menu"
+menu
